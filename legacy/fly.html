@@ -1,0 +1,3491 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sky Fighter</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;800&family=Rajdhani:wght@500;600;700&display=swap');
+*{box-sizing:border-box;margin:0;padding:0}
+body{overflow:hidden;background:#02060e;font-family:'Rajdhani',sans-serif;user-select:none;cursor:crosshair}
+canvas{display:block}
+#hud{position:absolute;inset:0;pointer-events:none;color:#eaf4ff;z-index:5}
+#fx-overlay{
+  position:absolute;inset:0;pointer-events:none;z-index:2;
+  background:
+    radial-gradient(ellipse 65% 55% at 50% 40%,transparent 38%,rgba(0,10,30,.38) 100%),
+    linear-gradient(180deg,rgba(0,15,40,.28) 0%,transparent 16%,transparent 70%,rgba(0,8,24,.45) 100%);
+  transition:background .15s;
+}
+#fx-overlay.fast{
+  background:
+    radial-gradient(ellipse 55% 48% at 50% 42%,transparent 22%,rgba(0,8,28,.55) 72%,rgba(0,4,18,.78) 100%),
+    linear-gradient(180deg,rgba(0,20,50,.35) 0%,transparent 14%,transparent 68%,rgba(0,6,20,.55) 100%);
+}
+#fx-overlay.boost{
+  background:
+    radial-gradient(ellipse 48% 42% at 50% 42%,transparent 12%,rgba(0,6,22,.62) 65%,rgba(0,2,12,.88) 100%),
+    linear-gradient(180deg,rgba(0,25,55,.4) 0%,transparent 12%,transparent 66%,rgba(0,4,16,.6) 100%);
+}
+#speed-lines{
+  position:absolute;inset:0;opacity:0;transition:opacity .1s;
+  background:
+    repeating-linear-gradient(105deg,transparent,transparent 28px,rgba(180,230,255,.05) 28px,rgba(180,230,255,.05) 29px),
+    repeating-linear-gradient(75deg,transparent,transparent 46px,rgba(120,200,255,.03) 46px,rgba(120,200,255,.03) 47px);
+  mask-image:radial-gradient(ellipse 42% 42% at 50% 42%,transparent 20%,#000 100%);
+}
+#speed-lines.radial{
+  background:
+    repeating-conic-gradient(from 0deg at 50% 42%,transparent 0deg,rgba(180,230,255,.045) 1.2deg,transparent 2.4deg),
+    repeating-linear-gradient(105deg,transparent,transparent 22px,rgba(180,230,255,.07) 22px,rgba(180,230,255,.07) 23px),
+    repeating-linear-gradient(75deg,transparent,transparent 38px,rgba(120,200,255,.04) 38px,rgba(120,200,255,.04) 39px);
+  mask-image:radial-gradient(ellipse 38% 38% at 50% 42%,transparent 8%,#000 92%);
+  filter:blur(.3px);
+}
+#damage-flash{
+  position:absolute;inset:0;opacity:0;pointer-events:none;z-index:3;
+  background:radial-gradient(ellipse at center,transparent 30%,rgba(180,20,20,.55) 100%);
+  transition:opacity .08s;
+}
+#top{position:absolute;top:0;left:0;right:0;display:flex;justify-content:space-between;align-items:flex-start;padding:14px 18px;gap:12px}
+#player-card{
+  display:flex;align-items:center;gap:12px;padding:12px 18px 12px 12px;
+  background:linear-gradient(145deg,rgba(8,18,36,.88),rgba(14,36,68,.55));
+  border:1px solid rgba(140,210,255,.4);border-radius:12px;
+  box-shadow:0 10px 40px rgba(0,0,0,.5),inset 0 1px 0 rgba(255,255,255,.12),0 0 24px rgba(40,140,255,.12);
+  backdrop-filter:blur(14px) saturate(1.5);position:relative;overflow:hidden;
+}
+#player-card::before{
+  content:'';position:absolute;inset:0;background:linear-gradient(110deg,transparent 40%,rgba(120,200,255,.08) 50%,transparent 60%);
+  animation:cardShine 4s ease-in-out infinite;
+}
+@keyframes cardShine{0%,100%{transform:translateX(-30%)}50%{transform:translateX(30%)}}
+#flag{width:32px;height:20px;border-radius:3px;flex-shrink:0;background:linear-gradient(#fff 33.3%,#0039a6 33.3%,#0039a6 66.6%,#d52b1e 66.6%);box-shadow:0 0 0 1px rgba(255,255,255,.25),0 2px 8px rgba(0,0,0,.4)}
+#player-card .name{font-family:'Orbitron',sans-serif;font-size:14px;font-weight:700;letter-spacing:2px;text-shadow:0 0 14px rgba(100,180,255,.6)}
+#player-card .score-wrap{display:flex;flex-direction:column;align-items:flex-start;margin-left:8px;position:relative}
+#player-card .score-label{font-size:9px;letter-spacing:2px;color:rgba(180,220,255,.55);font-family:'Orbitron',sans-serif}
+#player-card .score{
+  display:flex;align-items:center;gap:5px;color:#ffd76a;font-weight:800;font-size:22px;
+  font-family:'Orbitron',sans-serif;text-shadow:0 0 16px rgba(255,180,40,.55),0 0 4px rgba(255,200,80,.8);
+  transition:transform .12s ease-out,filter .12s;
+}
+#player-card .score.pop{transform:scale(1.28);filter:brightness(1.4);color:#fff4b0}
+#player-card .score::before{content:'★';color:#ffc107;font-size:15px;filter:drop-shadow(0 0 6px #fa0)}
+#score-float{
+  position:absolute;left:50%;top:0;transform:translate(-50%,-10px);pointer-events:none;
+  font-family:'Orbitron',sans-serif;font-weight:700;font-size:18px;color:#ffe066;
+  text-shadow:0 0 12px rgba(255,180,40,.9);opacity:0;z-index:20;
+}
+#score-float.show{animation:scoreFloat .9s ease-out forwards}
+@keyframes scoreFloat{
+  0%{opacity:1;transform:translate(-50%,0) scale(1.1)}
+  100%{opacity:0;transform:translate(-50%,-48px) scale(.9)}
+}
+#center-status{display:flex;flex-direction:column;align-items:center;gap:8px;min-width:280px}
+#timer-row{
+  display:flex;align-items:center;gap:14px;font-family:'Orbitron',sans-serif;font-size:28px;font-weight:700;letter-spacing:5px;
+  text-shadow:0 0 24px rgba(80,180,255,.85),0 2px 10px #000;
+  padding:6px 18px;border-radius:10px;
+  background:linear-gradient(180deg,rgba(10,24,48,.55),rgba(4,12,28,.35));
+  border:1px solid rgba(100,180,255,.25);box-shadow:inset 0 1px 0 rgba(255,255,255,.08);
+}
+#timer-row .ico{font-size:15px;opacity:.75;filter:drop-shadow(0 0 6px #4af)}
+#bars{display:flex;flex-direction:column;gap:7px;width:260px}
+.bar-row{display:flex;align-items:center;gap:8px}
+.bar-label{
+  width:36px;font-family:'Orbitron',sans-serif;font-size:9px;letter-spacing:1px;
+  color:rgba(160,210,255,.7);text-align:right;flex-shrink:0;
+}
+.bar-wrap{
+  flex:1;height:11px;border-radius:5px;overflow:hidden;
+  background:rgba(0,8,20,.65);border:1px solid rgba(160,210,255,.4);
+  box-shadow:inset 0 1px 4px rgba(0,0,0,.55),0 0 16px rgba(40,120,200,.18);position:relative;
+}
+.bar-fill{height:100%;border-radius:4px;position:relative;transition:width .08s linear}
+.bar-fill::after{content:'';position:absolute;inset:0;background:linear-gradient(180deg,rgba(255,255,255,.4),transparent 55%)}
+#hp-fill{background:linear-gradient(90deg,#1a8,#4e4,#ce4);width:100%;box-shadow:0 0 12px rgba(80,220,80,.55)}
+#fuel-fill{background:linear-gradient(90deg,#08c,#2df,#8ef);width:100%;box-shadow:0 0 12px rgba(40,180,255,.55)}
+#bars.fuel-low #fuel-fill{
+  background:linear-gradient(90deg,#c40,#f60,#fa4);
+  animation:fuelPulse .7s ease-in-out infinite;box-shadow:0 0 16px rgba(255,80,20,.7);
+}
+#bars.fuel-low .bar-wrap:last-child{border-color:rgba(255,120,40,.7);box-shadow:0 0 14px rgba(255,80,20,.35),inset 0 1px 4px rgba(0,0,0,.55)}
+@keyframes fuelPulse{0%,100%{filter:brightness(1)}50%{filter:brightness(1.45)}}
+#route-progress{
+  display:flex;align-items:center;gap:10px;margin-top:2px;
+  font-family:'Orbitron',sans-serif;font-size:11px;letter-spacing:1.5px;color:rgba(140,210,255,.75);
+}
+#route-dots{display:flex;gap:4px}
+#route-dots span{
+  width:8px;height:8px;border-radius:50%;background:rgba(80,140,200,.35);
+  border:1px solid rgba(120,180,255,.35);box-shadow:0 0 4px transparent;transition:all .25s;
+}
+#route-dots span.done{background:#4ef;border-color:#8ff;box-shadow:0 0 8px rgba(80,220,255,.7)}
+#route-dots span.current{background:#ffe066;border-color:#ffc;box-shadow:0 0 10px rgba(255,200,80,.8);transform:scale(1.15)}
+#resources{text-align:right;display:flex;flex-direction:column;align-items:flex-end;gap:6px}
+.stat-chip{
+  display:inline-flex;align-items:center;gap:8px;padding:7px 14px;border-radius:10px;
+  background:linear-gradient(135deg,rgba(6,16,34,.85),rgba(12,32,60,.55));
+  border:1px solid rgba(120,200,255,.32);
+  box-shadow:0 6px 24px rgba(0,0,0,.4),inset 0 1px 0 rgba(255,255,255,.1);
+  backdrop-filter:blur(10px);font-family:'Orbitron',sans-serif;font-weight:700;
+}
+.stat-chip .lbl{font-size:9px;letter-spacing:1.5px;color:rgba(150,200,255,.55)}
+.stat-chip .val{font-size:18px;min-width:48px;text-align:right;text-shadow:0 0 12px rgba(100,180,255,.5)}
+.stat-chip.spd .val{color:#c5e8ff}
+.stat-chip.spd.hot .val{color:#fff;text-shadow:0 0 16px #4af,0 0 4px #fff;animation:spdPulse .35s ease-in-out infinite alternate}
+.stat-chip.alt .val{color:#ffd24a;text-shadow:0 0 10px rgba(255,180,40,.4)}
+@keyframes spdPulse{from{transform:scale(1)}to{transform:scale(1.06)}}
+#nav-panel{
+  margin-top:4px;padding:10px 12px;border-radius:12px;min-width:150px;
+  background:linear-gradient(160deg,rgba(6,18,40,.88),rgba(10,28,56,.6));
+  border:1px solid rgba(100,190,255,.35);
+  box-shadow:0 8px 28px rgba(0,0,0,.45),inset 0 1px 0 rgba(255,255,255,.08);
+  backdrop-filter:blur(12px);text-align:center;
+}
+#compass{
+  width:64px;height:64px;margin:0 auto 6px;border-radius:50%;position:relative;
+  background:radial-gradient(circle,rgba(20,50,90,.5),rgba(4,12,28,.85));
+  border:2px solid rgba(120,200,255,.45);box-shadow:0 0 16px rgba(40,140,255,.3),inset 0 0 12px rgba(0,40,80,.5);
+}
+#compass-arrow{
+  position:absolute;left:50%;top:50%;width:0;height:0;
+  border-left:7px solid transparent;border-right:7px solid transparent;
+  border-bottom:26px solid #6ef;transform:translate(-50%,-70%) rotate(0deg);
+  transform-origin:50% 70%;filter:drop-shadow(0 0 6px #4af);transition:transform .08s linear;
+}
+#compass-arrow::after{
+  content:'';position:absolute;left:-4px;top:18px;width:0;height:0;
+  border-left:4px solid transparent;border-right:4px solid transparent;border-top:12px solid rgba(255,100,100,.7);
+}
+#nav-panel .dist-label{font-size:9px;letter-spacing:2px;color:rgba(140,200,255,.55);font-family:'Orbitron',sans-serif}
+#nav-panel .dist-val{font-size:20px;font-weight:700;color:#8ecfff;font-family:'Orbitron',sans-serif;text-shadow:0 0 14px rgba(80,180,255,.6)}
+#nav-panel .route-txt{font-size:11px;color:rgba(160,220,255,.65);margin-top:2px;letter-spacing:1px}
+#radar{
+  position:absolute;top:210px;right:20px;width:148px;height:148px;border-radius:50%;
+  border:2px solid rgba(130,200,255,.5);
+  box-shadow:0 0 0 1px rgba(0,0,0,.5),0 0 28px rgba(40,130,220,.4),inset 0 0 40px rgba(0,40,90,.55);
+  overflow:hidden;backdrop-filter:blur(4px);background:rgba(4,16,36,.78);
+}
+#radar-canvas{display:block;width:148px;height:148px;border-radius:50%}
+#radar-label{position:absolute;bottom:-22px;left:50%;transform:translateX(-50%);font-size:10px;letter-spacing:2px;color:rgba(140,200,255,.6);font-family:'Orbitron',sans-serif}
+#abilities{position:absolute;bottom:32px;left:50%;transform:translateX(-50%);display:flex;gap:16px;align-items:flex-end}
+.ability{width:68px;height:68px;border-radius:12px;display:flex;flex-direction:column;align-items:center;justify-content:center;background:linear-gradient(160deg,rgba(12,24,48,.85),rgba(6,12,28,.9));border:2px solid rgba(120,180,255,.35);box-shadow:0 6px 24px rgba(0,0,0,.5),inset 0 1px 0 rgba(255,255,255,.1);backdrop-filter:blur(8px);position:relative}
+.ability.active{border-color:rgba(100,220,255,.95);box-shadow:0 0 20px rgba(50,160,255,.55),inset 0 0 16px rgba(40,120,255,.15)}
+.ability .icon{font-size:24px;filter:drop-shadow(0 0 6px rgba(100,180,255,.5))}
+.ability .cd{position:absolute;bottom:5px;font-size:11px;font-weight:700;color:#a8d0ff;letter-spacing:.5px}
+.ability .ammo{position:absolute;top:5px;right:7px;font-size:13px;font-weight:700;color:#9ef;text-shadow:0 0 8px #4af}
+.ability .key{position:absolute;top:5px;left:7px;font-size:9px;color:rgba(160,200,255,.5);font-family:'Orbitron',sans-serif}
+.ability.overheat{border-color:rgba(255,100,40,.9);box-shadow:0 0 18px rgba(255,80,20,.45),inset 0 0 14px rgba(200,40,0,.2)}
+.ability .heat-bar{
+  position:absolute;left:6px;right:6px;bottom:18px;height:3px;border-radius:2px;
+  background:rgba(0,10,20,.7);overflow:hidden;border:1px solid rgba(120,180,255,.25);
+}
+.ability .heat-bar i{
+  display:block;height:100%;width:0%;border-radius:1px;
+  background:linear-gradient(90deg,#2af,#8ef);box-shadow:0 0 6px #4af;
+  transition:width .06s linear,background .15s;
+}
+.ability .heat-bar.hot i{background:linear-gradient(90deg,#f60,#fa4);box-shadow:0 0 8px #f40}
+.ability .heat-bar.oh i{background:linear-gradient(90deg,#c20,#f40);box-shadow:0 0 10px #f20;animation:heatFlash .4s ease-in-out infinite}
+@keyframes heatFlash{0%,100%{opacity:1}50%{opacity:.55}}
+#weapon-label{position:absolute;bottom:118px;left:50%;transform:translateX(-50%);font-size:13px;font-weight:600;letter-spacing:2px;color:rgba(120,200,255,.75);text-shadow:0 0 12px rgba(40,140,255,.5)}
+#help{position:absolute;bottom:16px;left:20px;font-size:12px;color:rgba(160,200,240,.4);letter-spacing:.4px}
+#mute-btn{
+  position:absolute;bottom:16px;right:20px;z-index:6;pointer-events:auto;cursor:pointer;
+  width:40px;height:40px;border-radius:8px;border:1px solid rgba(120,180,255,.35);
+  background:rgba(8,16,32,.75);color:#9cf;font-size:16px;
+  display:flex;align-items:center;justify-content:center;backdrop-filter:blur(8px);
+}
+#mute-btn:hover{border-color:#8cf;box-shadow:0 0 12px rgba(60,160,255,.4)}
+#crosshair{position:absolute;top:42%;left:50%;z-index:4;width:72px;height:72px;transform:translate(-50%,-50%);opacity:.55}
+#crosshair .ring{position:absolute;inset:0;border-radius:50%;border:1.5px solid rgba(150,220,255,.55);box-shadow:0 0 12px rgba(60,160,255,.25),inset 0 0 12px rgba(80,180,255,.1)}
+#crosshair .ring2{position:absolute;inset:8px;border-radius:50%;border:1px solid rgba(150,220,255,.2)}
+#crosshair .tick{position:absolute;background:rgba(160,230,255,.7);box-shadow:0 0 4px rgba(80,180,255,.5)}
+#crosshair .tick.t{width:2px;height:11px;left:50%;top:1px;transform:translateX(-50%)}
+#crosshair .tick.b{width:2px;height:11px;left:50%;bottom:1px;transform:translateX(-50%)}
+#crosshair .tick.l{width:11px;height:2px;top:50%;left:1px;transform:translateY(-50%)}
+#crosshair .tick.r{width:11px;height:2px;top:50%;right:1px;transform:translateY(-50%)}
+#crosshair .dot{position:absolute;left:50%;top:50%;width:3px;height:3px;margin:-1.5px;background:#bdf;border-radius:50%;box-shadow:0 0 8px #6cf}
+#lock-circle{
+  position:absolute;top:42%;left:50%;z-index:4;width:168px;height:168px;
+  transform:translate(-50%,-50%);pointer-events:none;
+  border-radius:50%;border:1.5px dashed rgba(120,220,160,.35);
+  box-shadow:0 0 18px rgba(60,200,120,.12),inset 0 0 20px rgba(40,160,100,.06);
+  transition:border-color .15s,box-shadow .15s;
+}
+#lock-circle.tracking{
+  border-style:solid;border-color:rgba(80,255,140,.75);
+  box-shadow:0 0 22px rgba(60,255,120,.35),inset 0 0 16px rgba(40,200,100,.1);
+}
+#lock-circle.locked{
+  border-style:solid;border-color:rgba(255,70,70,.95);
+  box-shadow:0 0 28px rgba(255,40,40,.55),inset 0 0 18px rgba(200,20,20,.15);
+  animation:lockPulse .45s ease-in-out infinite alternate;
+}
+@keyframes lockPulse{from{opacity:.85;transform:translate(-50%,-50%) scale(1)}to{opacity:1;transform:translate(-50%,-50%) scale(1.04)}}
+#lock-status{
+  position:absolute;top:calc(42% + 98px);left:50%;transform:translateX(-50%);
+  font-family:'Orbitron',sans-serif;font-size:11px;letter-spacing:3px;
+  color:rgba(140,220,180,.45);pointer-events:none;white-space:nowrap;z-index:5;
+}
+#lock-status.tracking{color:rgba(90,255,150,.85);text-shadow:0 0 10px rgba(60,255,120,.5)}
+#lock-status.locked{color:#ff6655;text-shadow:0 0 14px rgba(255,40,40,.7);font-weight:700}
+#world-hud{position:absolute;inset:0;pointer-events:none;z-index:3;overflow:hidden}
+.wh-box{
+  position:absolute;pointer-events:none;transform:translate(-50%,-50%);
+  font-family:'Orbitron',sans-serif;white-space:nowrap;
+}
+.wh-box .bracket{
+  position:relative;display:flex;align-items:center;justify-content:center;
+  min-width:36px;min-height:28px;padding:4px 10px;
+  color:rgba(160,220,255,.75);font-size:11px;letter-spacing:1px;
+  text-shadow:0 0 8px rgba(60,160,255,.5);
+}
+.wh-box .bracket::before,.wh-box .bracket::after{
+  content:'';position:absolute;top:0;bottom:0;width:10px;
+  border:2px solid currentColor;pointer-events:none;
+}
+.wh-box .bracket::before{left:0;border-right:none}
+.wh-box .bracket::after{right:0;border-left:none}
+.wh-box .lbl{display:block;margin-top:2px;font-size:9px;letter-spacing:1.5px;opacity:.85;text-align:center}
+.wh-box.wp .bracket{color:rgba(255,220,100,.8);text-shadow:0 0 8px rgba(255,180,40,.45)}
+.wh-box.wp.current .bracket{color:#ffe066;text-shadow:0 0 12px rgba(255,200,60,.7)}
+.wh-box.enemy .bracket{color:rgba(255,120,100,.7)}
+.wh-box.enemy.tracking .bracket{color:#4eff8a;text-shadow:0 0 12px rgba(60,255,120,.6)}
+.wh-box.enemy.locked .bracket{
+  color:#ff4455;text-shadow:0 0 14px rgba(255,40,40,.75);
+  animation:boxBlink .35s steps(1) infinite alternate;
+}
+@keyframes boxBlink{from{opacity:1}to{opacity:.55}}
+.wh-box.offscreen{opacity:.35}
+.wh-box.offscreen .bracket{min-width:22px;min-height:18px;padding:2px 6px;font-size:9px}
+#aim-ghost{
+  position:absolute;left:50%;top:42%;z-index:5;width:44px;height:44px;
+  transform:translate(-50%,-50%);pointer-events:none;will-change:transform;
+  transition:none;
+}
+#aim-ghost .g-ring{
+  position:absolute;inset:0;border-radius:50%;
+  border:2px solid rgba(255,220,120,.92);
+  box-shadow:0 0 14px rgba(255,180,40,.55),inset 0 0 10px rgba(255,200,80,.12);
+}
+#aim-ghost .g-ring2{
+  position:absolute;inset:6px;border-radius:50%;
+  border:1px solid rgba(255,230,160,.35);
+}
+#aim-ghost .g-dot{
+  position:absolute;left:50%;top:50%;width:4px;height:4px;margin:-2px;
+  background:#ffe066;border-radius:50%;box-shadow:0 0 10px #fa0;
+}
+#aim-ghost .g-lead{
+  position:absolute;left:50%;top:-10px;width:2px;height:8px;margin-left:-1px;
+  background:rgba(255,220,120,.85);box-shadow:0 0 6px rgba(255,180,40,.7);
+}
+#aim-hint{
+  position:absolute;bottom:108px;left:50%;transform:translateX(-50%);
+  font-family:'Orbitron',sans-serif;font-size:10px;letter-spacing:2px;
+  color:rgba(255,210,120,.45);pointer-events:none;
+}
+#msg{position:absolute;top:36%;left:50%;transform:translate(-50%,-50%);font-family:'Orbitron',sans-serif;font-size:32px;font-weight:700;color:#fff;text-align:center;display:none;z-index:10;text-shadow:0 0 40px rgba(40,140,255,.9),0 4px 20px #000;letter-spacing:2px;line-height:1.5;pointer-events:none}
+#end-panel{
+  position:absolute;inset:0;z-index:30;display:none;align-items:center;justify-content:center;
+  background:radial-gradient(ellipse at center,rgba(4,16,40,.72),rgba(2,6,14,.88));
+  pointer-events:auto;backdrop-filter:blur(6px);
+}
+#end-panel.show{display:flex}
+#end-card{
+  width:min(420px,92vw);padding:36px 32px 28px;border-radius:16px;text-align:center;
+  background:linear-gradient(165deg,rgba(10,28,56,.95),rgba(6,14,32,.98));
+  border:1px solid rgba(120,200,255,.45);
+  box-shadow:0 24px 80px rgba(0,0,0,.65),0 0 40px rgba(40,140,255,.2),inset 0 1px 0 rgba(255,255,255,.12);
+}
+#end-card h2{
+  font-family:'Orbitron',sans-serif;font-size:26px;letter-spacing:4px;color:#9cf;
+  text-shadow:0 0 28px rgba(60,160,255,.7);margin-bottom:8px;
+}
+#end-card .end-score{
+  font-family:'Orbitron',sans-serif;font-size:42px;font-weight:800;color:#ffd76a;
+  text-shadow:0 0 24px rgba(255,180,40,.55);margin:12px 0 4px;
+}
+#end-card .end-sub{color:rgba(160,200,255,.65);font-size:14px;letter-spacing:2px;margin-bottom:8px}
+#end-stats{
+  display:flex;justify-content:center;gap:18px;margin:8px 0 22px;
+  font-family:'Orbitron',sans-serif;font-size:12px;letter-spacing:1.5px;color:rgba(160,210,255,.75);
+}
+#end-stats span{display:flex;flex-direction:column;gap:2px}
+#end-stats b{font-size:18px;color:#ffe066;font-weight:700}
+#pause-panel{
+  position:absolute;inset:0;z-index:28;display:none;align-items:center;justify-content:center;
+  background:rgba(2,8,18,.72);pointer-events:auto;backdrop-filter:blur(5px);
+}
+#pause-panel.show{display:flex}
+#pause-card{
+  width:min(360px,90vw);padding:32px 28px 24px;border-radius:14px;text-align:center;
+  background:linear-gradient(165deg,rgba(10,28,56,.96),rgba(6,14,32,.98));
+  border:1px solid rgba(120,200,255,.4);
+  box-shadow:0 20px 60px rgba(0,0,0,.55);
+}
+#pause-card h2{
+  font-family:'Orbitron',sans-serif;font-size:22px;letter-spacing:4px;color:#9cf;margin-bottom:20px;
+}
+#wave-toast{
+  position:absolute;top:22%;left:50%;transform:translateX(-50%);z-index:12;pointer-events:none;
+  font-family:'Orbitron',sans-serif;font-size:18px;letter-spacing:4px;color:#8cf;
+  text-shadow:0 0 20px rgba(60,160,255,.8);opacity:0;transition:opacity .25s;
+}
+#wave-toast.show{opacity:1}
+#end-actions,.end-actions{display:flex;flex-direction:column;gap:10px;align-items:stretch}
+.end-btn{
+  pointer-events:auto;cursor:pointer;border:none;font-family:'Orbitron',sans-serif;
+  font-size:14px;font-weight:700;letter-spacing:3px;padding:14px 20px;border-radius:10px;
+  transition:transform .12s,box-shadow .12s,background .12s;
+}
+.end-btn.primary{
+  color:#041018;background:linear-gradient(135deg,#4af,#8ef 55%,#bdf);
+  box-shadow:0 0 24px rgba(80,180,255,.45),inset 0 1px 0 rgba(255,255,255,.5);
+}
+.end-btn.primary:hover{transform:translateY(-2px);box-shadow:0 0 36px rgba(80,200,255,.65)}
+.end-btn.secondary{
+  color:#9cf;background:rgba(20,40,70,.6);border:1px solid rgba(100,180,255,.4);
+}
+.end-btn.secondary:hover{background:rgba(40,70,110,.7);border-color:#8cf}
+.end-btn:active{transform:scale(.98)}
+#loading{
+  position:absolute;inset:0;z-index:100;background:radial-gradient(ellipse at center,#0a1a35,#02060e);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;transition:opacity .6s;cursor:pointer;
+}
+#loading h1{font-family:'Orbitron',sans-serif;font-size:28px;letter-spacing:8px;color:#8cf;margin-bottom:16px;text-shadow:0 0 30px rgba(60,160,255,.6)}
+#loading p{color:rgba(160,200,255,.7);font-size:15px;letter-spacing:3px;margin-top:20px;animation:pulse 1.4s ease-in-out infinite}
+@keyframes pulse{0%,100%{opacity:.45}50%{opacity:1}}
+#loading .bar{width:200px;height:3px;background:rgba(80,140,200,.2);border-radius:2px;overflow:hidden}
+#loading .bar i{display:block;height:100%;width:0%;background:linear-gradient(90deg,#2af,#8ef);box-shadow:0 0 12px #4af;animation:load 1s ease-out forwards}
+@keyframes load{to{width:100%}}
+</style>
+</head>
+<body>
+
+<div id="loading">
+  <h1>SKY FIGHTER</h1>
+  <div class="bar"><i></i></div>
+  <p>CLICK TO START</p>
+</div>
+
+<div id="fx-overlay"><div id="speed-lines"></div></div>
+<div id="damage-flash"></div>
+
+<div id="hud">
+  <div id="top">
+    <div id="player-card">
+      <div id="flag"></div>
+      <div>
+        <div class="name">PILOT</div>
+        <div class="score-wrap">
+          <div class="score-label">SCORE</div>
+          <div class="score" id="score">0</div>
+          <div id="score-float"></div>
+        </div>
+      </div>
+    </div>
+    <div id="center-status">
+      <div id="timer-row">
+        <span class="ico">✈</span>
+        <span id="timer">05:00</span>
+        <span class="ico">◈</span>
+      </div>
+      <div id="bars">
+        <div class="bar-row"><span class="bar-label">ARMOR</span><div class="bar-wrap"><div class="bar-fill" id="hp-fill"></div></div></div>
+        <div class="bar-row"><span class="bar-label">FUEL</span><div class="bar-wrap"><div class="bar-fill" id="fuel-fill"></div></div></div>
+      </div>
+      <div id="route-progress">
+        <span>ROUTE</span>
+        <div id="route-dots"></div>
+        <span id="route-count">0/10</span>
+      </div>
+    </div>
+    <div id="resources">
+      <div class="stat-chip spd" id="spd-chip"><span class="lbl">IAS</span><span class="val" id="spd-ui">120</span></div>
+      <div class="stat-chip alt"><span class="lbl">ALT</span><span class="val" id="alt-ui">500</span></div>
+      <div id="nav-panel">
+        <div id="compass"><div id="compass-arrow"></div></div>
+        <div class="dist-label">NEXT WAYPOINT</div>
+        <div class="dist-val"><span id="dist">0</span> m</div>
+        <div class="route-txt" id="route-hint">RING 1 / 10</div>
+      </div>
+    </div>
+  </div>
+  <div id="radar">
+    <canvas id="radar-canvas" width="148" height="148"></canvas>
+    <div id="radar-label">RADAR</div>
+  </div>
+  <div id="crosshair" title="機頭參考">
+    <div class="ring"></div><div class="ring2"></div>
+    <div class="tick t"></div><div class="tick b"></div>
+    <div class="tick l"></div><div class="tick r"></div>
+    <div class="dot"></div>
+  </div>
+  <div id="lock-circle"></div>
+  <div id="lock-status">NO LOCK</div>
+  <div id="world-hud"></div>
+  <div id="aim-ghost" title="滑鼠瞄準點">
+    <div class="g-lead"></div>
+    <div class="g-ring"></div><div class="g-ring2"></div>
+    <div class="g-dot"></div>
+  </div>
+  <div id="aim-hint">MOUSE AIM</div>
+  <div id="weapon-label">CANNON · SPACE / MISSILE · F</div>
+  <div id="abilities">
+    <div class="ability"><span class="key">R</span><div class="icon">⟲</div><div class="cd" id="boost-cd">READY</div></div>
+    <div class="ability active" id="msl-ability"><span class="key">F</span><div class="icon">◈</div><div class="ammo" id="ammo">6</div><div class="cd" id="missile-cd">MSL</div></div>
+    <div class="ability" id="gun-ability"><span class="key">␣</span><div class="icon">✦</div><div class="heat-bar" id="heat-bar"><i id="heat-fill"></i></div><div class="cd" id="gun-cd">GUN</div></div>
+  </div>
+  <div id="help">滑鼠瞄準 · WASD 微調 · Q/E 舵 · Shift/Ctrl 油門 · R 加力 · F 導彈 · Space 機砲 · ESC 暫停 · M 靜音</div>
+  <button id="mute-btn" title="靜音">🔊</button>
+</div>
+<div id="msg"></div>
+<div id="wave-toast"></div>
+
+<div id="pause-panel">
+  <div id="pause-card">
+    <h2>PAUSED</h2>
+    <div class="end-actions">
+      <button type="button" class="end-btn primary" id="btn-resume">繼續</button>
+      <button type="button" class="end-btn secondary" id="btn-pause-restart">重新開始</button>
+    </div>
+  </div>
+</div>
+
+<div id="end-panel">
+  <div id="end-card">
+    <h2 id="end-title">MISSION END</h2>
+    <div class="end-score" id="end-score">0</div>
+    <div class="end-sub">FINAL SCORE</div>
+    <div id="end-stats">
+      <span>擊墜 <b id="end-kills">0</b></span>
+      <span>時間 <b id="end-time">00:00</b></span>
+      <span>波次 <b id="end-wave">0</b></span>
+    </div>
+    <div class="end-actions">
+      <button type="button" class="end-btn primary" id="btn-restart">重新開始</button>
+    </div>
+  </div>
+</div>
+
+<script type="importmap">
+{"imports":{
+  "three":"https://unpkg.com/three@0.160.0/build/three.module.js",
+  "three/addons/":"https://unpkg.com/three@0.160.0/examples/jsm/"
+}}
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
+import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+
+// ═══════════════════════════════════════
+//  音效系統（Web Audio 程序化，無需外部檔）
+// ═══════════════════════════════════════
+const AudioFX = (() => {
+  let ctx = null, master = null, muted = false;
+  let engineOsc = null, engineGain = null, engineFilter = null, noiseSrc = null, noiseGain = null;
+  let windGain = null, started = false;
+
+  function ensure() {
+    if (ctx) return;
+    ctx = new (window.AudioContext || window.webkitAudioContext)();
+    master = ctx.createGain();
+    master.gain.value = 0.55;
+    master.connect(ctx.destination);
+  }
+
+  function noiseBuffer(dur = 1) {
+    const n = Math.floor(ctx.sampleRate * dur);
+    const buf = ctx.createBuffer(1, n, ctx.sampleRate);
+    const d = buf.getChannelData(0);
+    for (let i = 0; i < n; i++) d[i] = Math.random() * 2 - 1;
+    return buf;
+  }
+
+  function beep(freq, dur, type = 'sine', vol = 0.15, slide = 0) {
+    if (!ctx || !started || muted) return;
+    const o = ctx.createOscillator();
+    const g = ctx.createGain();
+    o.type = type; o.frequency.value = freq;
+    if (slide) o.frequency.linearRampToValueAtTime(freq + slide, ctx.currentTime + dur);
+    g.gain.setValueAtTime(vol, ctx.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + dur);
+    o.connect(g); g.connect(master);
+    o.start(); o.stop(ctx.currentTime + dur);
+  }
+
+  function noiseBurst(dur, vol, freq, q = 1) {
+    if (!ctx || !started || muted) return;
+    const src = ctx.createBufferSource();
+    src.buffer = noiseBuffer(Math.max(dur, 0.05));
+    const f = ctx.createBiquadFilter();
+    f.type = 'bandpass'; f.frequency.value = freq; f.Q.value = q;
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(vol, ctx.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + dur);
+    src.connect(f); f.connect(g); g.connect(master);
+    src.start();
+  }
+
+  return {
+    unlock() {
+      ensure();
+      if (ctx.state === 'suspended') ctx.resume();
+      if (started) return;
+      started = true;
+      engineOsc = ctx.createOscillator();
+      engineOsc.type = 'sawtooth';
+      engineOsc.frequency.value = 55;
+      engineFilter = ctx.createBiquadFilter();
+      engineFilter.type = 'lowpass';
+      engineFilter.frequency.value = 400;
+      engineGain = ctx.createGain();
+      engineGain.gain.value = 0.0001;
+      engineOsc.connect(engineFilter);
+      engineFilter.connect(engineGain);
+      engineGain.connect(master);
+      engineOsc.start();
+
+      noiseSrc = ctx.createBufferSource();
+      noiseSrc.buffer = noiseBuffer(2);
+      noiseSrc.loop = true;
+      const nf = ctx.createBiquadFilter();
+      nf.type = 'bandpass'; nf.frequency.value = 800; nf.Q.value = 0.6;
+      noiseGain = ctx.createGain();
+      noiseGain.gain.value = 0.0001;
+      noiseSrc.connect(nf); nf.connect(noiseGain); noiseGain.connect(master);
+      noiseSrc.start();
+
+      const windNoise = ctx.createBufferSource();
+      windNoise.buffer = noiseBuffer(3); windNoise.loop = true;
+      const wf = ctx.createBiquadFilter();
+      wf.type = 'lowpass'; wf.frequency.value = 350;
+      windGain = ctx.createGain();
+      windGain.gain.value = 0.04;
+      windNoise.connect(wf); wf.connect(windGain); windGain.connect(master);
+      windNoise.start();
+    },
+    setEngine(throttle, airspeed) {
+      if (!started || !ctx || muted) return;
+      const t = ctx.currentTime;
+      const pitch = 48 + throttle * 110 + airspeed * 35;
+      engineOsc.frequency.setTargetAtTime(pitch, t, 0.08);
+      engineFilter.frequency.setTargetAtTime(260 + throttle * 1200 + airspeed * 200, t, 0.08);
+      engineGain.gain.setTargetAtTime(0.03 + throttle * 0.16 + airspeed * 0.04, t, 0.08);
+      noiseGain.gain.setTargetAtTime(0.012 + throttle * 0.09 + airspeed * 0.025, t, 0.08);
+      if (windGain) windGain.gain.setTargetAtTime(0.03 + airspeed * 0.08, t, 0.15);
+    },
+    gun() {
+      noiseBurst(0.06, 0.22, 1800, 2);
+      beep(180, 0.05, 'square', 0.08, -80);
+    },
+    missile() {
+      noiseBurst(0.35, 0.2, 400, 0.8);
+      beep(220, 0.4, 'sawtooth', 0.1, 400);
+    },
+    boom(scale = 1) {
+      noiseBurst(0.5 * scale, 0.35 * scale, 120, 0.5);
+      beep(60, 0.5 * scale, 'sine', 0.25 * scale, -40);
+      beep(90, 0.3 * scale, 'triangle', 0.12 * scale, -30);
+    },
+    boost() { noiseBurst(0.4, 0.18, 900, 0.7); beep(100, 0.5, 'sawtooth', 0.1, 200); },
+    pickup() { beep(660, 0.08, 'sine', 0.1); setTimeout(() => beep(990, 0.12, 'sine', 0.1), 70); },
+    hit() { noiseBurst(0.15, 0.2, 300, 1.2); },
+    waypoint() { beep(520, 0.1, 'sine', 0.1); setTimeout(() => beep(780, 0.15, 'sine', 0.1), 90); },
+    /** Ace Combat 風格雙聲鎖定哔 */
+    lockTone() {
+      beep(880, 0.07, 'square', 0.12);
+      setTimeout(() => beep(880, 0.07, 'square', 0.12), 95);
+    },
+    lockTick() { beep(720, 0.035, 'square', 0.05); },
+    overheat() { beep(140, 0.2, 'sawtooth', 0.1, -60); noiseBurst(0.25, 0.12, 500, 1); },
+    setPaused(paused) {
+      if (!started || !ctx) return;
+      const t = ctx.currentTime;
+      if (paused) {
+        if (engineGain) engineGain.gain.setTargetAtTime(0.0001, t, 0.05);
+        if (noiseGain) noiseGain.gain.setTargetAtTime(0.0001, t, 0.05);
+        if (windGain) windGain.gain.setTargetAtTime(0.0001, t, 0.05);
+      }
+    },
+    toggleMute() {
+      muted = !muted;
+      if (master) master.gain.setTargetAtTime(muted ? 0 : 0.55, ctx?.currentTime || 0, 0.05);
+      return muted;
+    },
+    get muted() { return muted; },
+  };
+})();
+
+// ═══════════════════════════════════════
+//  工具
+// ═══════════════════════════════════════
+function approach(c, t, r, dt) {
+  const d = t - c, s = r * dt;
+  return Math.abs(d) <= s ? t : c + Math.sign(d) * s;
+}
+
+const TOTAL_RINGS = 10;
+const BASE_FOV = 55;
+const MAX_FOV = 78;
+const RADAR_RANGE = 450;
+const MAX_TRAIL_PARTICLES = 90;
+const BULLET_POOL_SIZE = 96;
+const MISSILE_POOL_SIZE = 24;
+const EXPLOSION_POOL_SIZE = 72;
+const GameState = Object.freeze({
+  MENU: 'MENU',
+  PLAYING: 'PLAYING',
+  PAUSED: 'PAUSED',
+  GAMEOVER: 'GAMEOVER',
+});
+const SUN_DIR = new THREE.Vector3(-0.55, 0.32, 0.45).normalize();
+
+// ═══════════════════════════════════════
+//  MouseAim — WT 街機風格虛擬搖桿（絕對座標）
+//  畫面中央為中立；游標偏離 → 滾轉／俯仰指令
+// ═══════════════════════════════════════
+class MouseAim {
+  constructor() {
+    this.nx = 0;
+    this.ny = 0;
+    this.sx = 0;
+    this.sy = 0;
+    this.active = false;
+    this.el = document.getElementById('aim-ghost');
+    this.centerY = 0.42;
+    this.sensitivity = 1.15;
+    this.smooth = 10;
+    this.deadzone = 0.04;
+    this.maxCmd = 1;
+  }
+
+  /** 絕對滑鼠：相對視窗中心正規化到 [-1,1]（最像 WT 街機） */
+  setFromClient(clientX, clientY) {
+    this.nx = ((clientX / innerWidth) - 0.5) * 2 * this.sensitivity;
+    this.ny = ((clientY / innerHeight) - this.centerY) * 2 * this.sensitivity;
+    this.nx = THREE.MathUtils.clamp(this.nx, -1.35, 1.35);
+    this.ny = THREE.MathUtils.clamp(this.ny, -1.35, 1.35);
+    this.active = true;
+  }
+
+  update(dt) {
+    const k = 1 - Math.exp(-this.smooth * dt);
+    this.sx += (this.nx - this.sx) * k;
+    this.sy += (this.ny - this.sy) * k;
+    this.renderHud();
+  }
+
+  renderHud() {
+    if (!this.el) return;
+    const px = (this.sx / this.sensitivity) * 0.5 * innerWidth;
+    const py = (this.sy / this.sensitivity) * 0.5 * innerHeight;
+    this.el.style.transform = `translate(calc(-50% + ${px}px), calc(-50% + ${py}px))`;
+  }
+
+  /** @returns {{ pitch: number, roll: number }} 正規化指令 */
+  commands() {
+    let x = this.sx, y = this.sy;
+    const mag = Math.hypot(x, y);
+    if (mag < this.deadzone) return { pitch: 0, roll: 0 };
+    const scale = Math.min(1, (mag - this.deadzone) / (1 - this.deadzone));
+    x = (x / mag) * scale;
+    y = (y / mag) * scale;
+    // 水平偏離 → 滾轉；垂直 → 俯仰（游標在上方＝拉桿抬頭）
+    return {
+      roll: THREE.MathUtils.clamp(-x * this.maxCmd, -1, 1),
+      pitch: THREE.MathUtils.clamp(-y * this.maxCmd, -1, 1),
+    };
+  }
+
+  reset() {
+    this.nx = this.ny = this.sx = this.sy = 0;
+    this.renderHud();
+  }
+}
+
+// ═══════════════════════════════════════
+//  FlightModel — 升力／阻力／失速／重力
+// ═══════════════════════════════════════
+class FlightModel {
+  constructor() {
+    // 空速單位約 m/s（遊戲尺度）；顯示用再換算
+    this.stallSpeed = 22;
+    this.cruiseSpeed = 58; // 與油門≈0.5 平衡空速對齊，約 1g 平飛
+    this.maxSpeed = 92;
+    this.minSpeed = 8;
+    this.thrustForce = 78;
+    this.boostExtra = 55;
+    this.dragCoeff = 0.011;
+    this.liftCoeff = 0.0125; // 保留欄位；實際升力改以 g-load 曲線
+    this.gravity = 28;
+    this.velocityAlign = 3.2;
+    this.aoaLiftGain = 0.85;
+  }
+
+  /**
+   * 以推力、升力(空速²×AoA)、阻力、重力積分速度與位置。
+   * 移除舊版 y += (throttle*1.08-1)*12 偏置。
+   * 升力以「可支撐重量倍數」建模，避免 V² 失控爬升。
+   */
+  integrate(dt, root, velocity, throttle, boosting) {
+    const forward = FlightModel._fwd.set(0, 0, -1).applyQuaternion(root.quaternion);
+    const wingUp = FlightModel._up.set(0, 1, 0).applyQuaternion(root.quaternion);
+
+    let speed = velocity.length();
+    if (speed < 0.01) {
+      velocity.copy(forward).multiplyScalar(this.minSpeed);
+      speed = this.minSpeed;
+    }
+
+    const velDir = FlightModel._velDir.copy(velocity).multiplyScalar(1 / speed);
+
+    // AoA：機頭俯仰 − 航跡俯仰（街機可讀、穩定）
+    const nosePitch = Math.asin(THREE.MathUtils.clamp(forward.y, -1, 1));
+    const pathPitch = Math.asin(THREE.MathUtils.clamp(velDir.y, -1, 1));
+    const aoa = THREE.MathUtils.clamp(nosePitch - pathPitch, -0.85, 0.85);
+
+    // 失速：低於閾值升力急降
+    const stallRatio = speed / this.stallSpeed;
+    const stallMul = stallRatio < 1
+      ? Math.pow(Math.max(0.05, stallRatio), 2.2)
+      : 1;
+
+    // 升力以 g 倍數表示：巡航速約 1g，高速可達 ~2.8g，低速失速墜下
+    // 升力以 g 倍數：失速下不足 1g；平飛巡航 ≈1g；正 AoA／高速略增
+    const speedRatio = speed / this.cruiseSpeed;
+    const aoaTerm = 1 + this.aoaLiftGain * aoa;
+    const gLoad = THREE.MathUtils.clamp(
+      stallMul * aoaTerm * Math.min(1.15, 0.55 + 0.45 * speedRatio),
+      0,
+      2.6
+    );
+    const liftMag = this.gravity * gLoad;
+    const lift = FlightModel._lift.copy(wingUp).multiplyScalar(liftMag);
+
+    // 推力沿機頭；加力額外推力
+    const thrustMag = this.thrustForce * throttle + (boosting ? this.boostExtra : 0);
+    const thrust = FlightModel._thrust.copy(forward).multiplyScalar(thrustMag);
+
+    // 二次阻力（加力結束後速度平滑衰減）
+    const dragMag = this.dragCoeff * speed * speed;
+    const drag = FlightModel._drag.copy(velDir).multiplyScalar(-dragMag);
+
+    // 重力世界 -Y
+    const grav = FlightModel._grav.set(0, -this.gravity, 0);
+
+    velocity.addScaledVector(thrust, dt);
+    velocity.addScaledVector(lift, dt);
+    velocity.addScaledVector(drag, dt);
+    velocity.addScaledVector(grav, dt);
+
+    // 街機：速度方向緩慢對齊機頭（保留慣性側滑）
+    speed = velocity.length();
+    const aligned = FlightModel._aligned.copy(forward).multiplyScalar(speed);
+    const alignK = 1 - Math.exp(-this.velocityAlign * dt);
+    velocity.lerp(aligned, alignK * 0.55);
+
+    // 中立姿態時輕微修平航跡，避免數值漂移爬升
+    if (Math.abs(aoa) < 0.08 && Math.abs(nosePitch) < 0.12) {
+      velocity.y *= Math.pow(0.25, dt);
+    }
+
+    // 限速
+    speed = velocity.length();
+    if (speed > this.maxSpeed) velocity.multiplyScalar(this.maxSpeed / speed);
+    if (speed < this.minSpeed * 0.5) {
+      velocity.addScaledVector(forward, this.minSpeed * 0.15 * dt);
+    }
+
+    root.position.addScaledVector(velocity, dt);
+
+    return {
+      airspeed: velocity.length(),
+      aoa,
+      stallMul,
+      gApprox: gLoad,
+    };
+  }
+}
+FlightModel._fwd = new THREE.Vector3();
+FlightModel._up = new THREE.Vector3();
+FlightModel._velDir = new THREE.Vector3();
+FlightModel._tmp = new THREE.Vector3();
+FlightModel._tmp2 = new THREE.Vector3();
+FlightModel._lift = new THREE.Vector3();
+FlightModel._thrust = new THREE.Vector3();
+FlightModel._drag = new THREE.Vector3();
+FlightModel._grav = new THREE.Vector3();
+FlightModel._aligned = new THREE.Vector3();
+
+// ═══════════════════════════════════════
+//  CameraRig — Spring-mass 動態相機
+// ═══════════════════════════════════════
+class CameraRig {
+  constructor(camera) {
+    this.camera = camera;
+    this.baseOffset = new THREE.Vector3(2.2, 3.8, 15.5);
+    this.baseLook = new THREE.Vector3(-0.5, -0.5, -32);
+    this.pos = new THREE.Vector3(2, 60, 118);
+    this.vel = new THREE.Vector3();
+    this.look = new THREE.Vector3(0, 55, 70);
+    this.lookVel = new THREE.Vector3();
+    this.fov = BASE_FOV;
+    this.shake = 0;
+    this.stiffness = 48;
+    this.damping = 11;
+    this.lookStiff = 36;
+    this.lookDamp = 9;
+    this._desired = new THREE.Vector3();
+    this._lookDesired = new THREE.Vector3();
+    this._shake = new THREE.Vector3();
+    this._up = new THREE.Vector3();
+    this._worldUp = new THREE.Vector3(0, 1, 0);
+    this.boostPull = 0;
+  }
+
+  addShake(amount) {
+    this.shake = Math.max(this.shake, amount);
+  }
+
+  reset(playerPos) {
+    this.pos.set(playerPos.x + 2, playerPos.y + 5, playerPos.z + 18);
+    this.vel.set(0, 0, 0);
+    this.look.copy(playerPos);
+    this.lookVel.set(0, 0, 0);
+    this.fov = BASE_FOV;
+    this.shake = 0;
+    this.boostPull = 0;
+    this.camera.fov = BASE_FOV;
+    this.camera.updateProjectionMatrix();
+  }
+
+  /**
+   * 高 G／大滾轉 → 彈簧變軟、延遲跟隨
+   * 加力 → 後拉 + FOV 拉開；受傷 shake
+   */
+  update(dt, playerRoot, airspeedNorm, throttle, boosting, rollAmt, gLoad) {
+    const soft = 1 + Math.min(1.8, Math.abs(rollAmt) * 1.2 + Math.max(0, gLoad - 1) * 0.35);
+    const stiff = this.stiffness / soft;
+    const damp = this.damping * (0.85 + 0.15 / soft);
+
+    this.boostPull = approach(this.boostPull, boosting ? 1 : airspeedNorm * 0.35, 2.8, dt);
+
+    const offset = CameraRig._off.copy(this.baseOffset);
+    offset.z += this.boostPull * 5.5;
+    offset.y += this.boostPull * 0.9;
+
+    this._desired.copy(offset).applyQuaternion(playerRoot.quaternion).add(playerRoot.position);
+    // spring-mass
+    const ax = (this._desired.x - this.pos.x) * stiff - this.vel.x * damp;
+    const ay = (this._desired.y - this.pos.y) * stiff - this.vel.y * damp;
+    const az = (this._desired.z - this.pos.z) * stiff - this.vel.z * damp;
+    this.vel.x += ax * dt; this.vel.y += ay * dt; this.vel.z += az * dt;
+    this.pos.addScaledVector(this.vel, dt);
+
+    this._lookDesired.copy(this.baseLook).applyQuaternion(playerRoot.quaternion).add(playerRoot.position);
+    this._lookDesired.y -= this.boostPull * 1.2;
+    const lx = (this._lookDesired.x - this.look.x) * this.lookStiff - this.lookVel.x * this.lookDamp;
+    const ly = (this._lookDesired.y - this.look.y) * this.lookStiff - this.lookVel.y * this.lookDamp;
+    const lz = (this._lookDesired.z - this.look.z) * this.lookStiff - this.lookVel.z * this.lookDamp;
+    this.lookVel.x += lx * dt; this.lookVel.y += ly * dt; this.lookVel.z += lz * dt;
+    this.look.addScaledVector(this.lookVel, dt);
+
+    const targetFov = BASE_FOV + (MAX_FOV - BASE_FOV) * (
+      Math.pow(airspeedNorm, 1.1) * 0.7 + this.boostPull * 0.55
+    );
+    this.fov = approach(this.fov, targetFov, 10, dt);
+    this.camera.fov = this.fov;
+    this.camera.updateProjectionMatrix();
+
+    if (this.shake > 0) {
+      const s = this.shake * (1.1 + throttle * 0.2);
+      this._shake.set(
+        (Math.random() - 0.5) * s * 2.2,
+        (Math.random() - 0.5) * s * 2.2,
+        (Math.random() - 0.5) * s * 1.1
+      );
+      this.shake *= Math.pow(0.03, dt);
+      if (this.shake < 0.004) this.shake = 0;
+    } else {
+      this._shake.set(0, 0, 0);
+    }
+
+    this.camera.position.copy(this.pos).add(this._shake);
+    this._up.set(0, 1, 0).applyQuaternion(playerRoot.quaternion).lerp(this._worldUp, 0.72).normalize();
+    this.camera.up.copy(this._up);
+    this.camera.lookAt(this.look);
+  }
+}
+CameraRig._off = new THREE.Vector3();
+
+// ═══════════════════════════════════════
+//  PlayerJet — 姿態、油門、物理、射擊介面
+// ═══════════════════════════════════════
+class PlayerJet {
+  constructor(scene) {
+    this.scene = scene;
+    this.root = new THREE.Group();
+    this.root.position.set(0, 55, 100);
+    this.mesh = createJet();
+    this.root.add(this.mesh);
+    scene.add(this.root);
+
+    this.model = new FlightModel();
+    this.velocity = new THREE.Vector3(0, 0, -48);
+    this.throttle = 0.5;
+    this.throttleTarget = 0.5;
+    this.pitchRate = 0;
+    this.rollRate = 0;
+    this.yawRate = 0;
+    this.boosting = false;
+    this.boostTimer = 0;
+    this.prevThrottle = 0.5;
+    this.hp = 100;
+    this.telemetry = { airspeed: 48, aoa: 0, stallMul: 1, gApprox: 1 };
+
+    this.MAX_PITCH = 1.05;
+    this.MAX_ROLL = 1.85;
+    this.MAX_YAW = 0.42;
+    this.INPUT_LERP = 5.2;
+    this.THROTTLE_LERP = 1.3;
+    this.BANK_TURN = 0.85;
+    this.KEY_BLEND = 0.55;
+
+    this._fwd = new THREE.Vector3();
+    this._right = new THREE.Vector3();
+    this._worldUp = new THREE.Vector3(0, 1, 0);
+  }
+
+  get position() { return this.root.position; }
+  get quaternion() { return this.root.quaternion; }
+  get airspeed() { return this.telemetry.airspeed; }
+  get airspeedNorm() {
+    return THREE.MathUtils.clamp(this.airspeed / this.model.maxSpeed, 0, 1.2);
+  }
+
+  reset() {
+    this.root.position.set(0, 55, 100);
+    this.root.quaternion.identity();
+    this.velocity.set(0, 0, -48);
+    this.throttle = 0.5;
+    this.throttleTarget = 0.5;
+    this.pitchRate = this.rollRate = this.yawRate = 0;
+    this.boosting = false;
+    this.boostTimer = 0;
+    this.prevThrottle = 0.5;
+    this.hp = 100;
+    this.mesh.visible = true;
+    this.telemetry = { airspeed: 48, aoa: 0, stallMul: 1, gApprox: 1 };
+  }
+
+  takeDamage(amount) {
+    this.hp -= amount;
+    return this.hp;
+  }
+
+  /** 加力：短暫推力峰值 + 空速注入（慣性後續由阻力平滑） */
+  triggerBoost() {
+    this.throttleTarget = 1;
+    this.boosting = true;
+    this.boostTimer = 1.8;
+    const fwd = this.getForward();
+    this.velocity.addScaledVector(fwd, 22);
+    const sp = this.velocity.length();
+    if (sp > this.model.maxSpeed * 1.15) {
+      this.velocity.multiplyScalar((this.model.maxSpeed * 1.15) / sp);
+    }
+  }
+
+  getForward() {
+    return this._fwd.set(0, 0, -1).applyQuaternion(this.root.quaternion);
+  }
+
+  getGunOrigin() {
+    return new THREE.Vector3(0, 0, -4.5).applyMatrix4(this.root.matrixWorld);
+  }
+
+  getGunDirection() {
+    return new THREE.Vector3(0, 0, -1).applyQuaternion(this.root.quaternion);
+  }
+
+  /**
+   * 滑鼠瞄準為主；WASD／方向鍵疊加微調；Q/E 方向舵
+   */
+  updateControls(dt, mouseAim, keys) {
+    const aim = mouseAim.commands();
+    let pitchCmd = aim.pitch;
+    let rollCmd = aim.roll;
+    let yawCmd = 0;
+
+    if (keys.KeyW || keys.ArrowUp) pitchCmd = THREE.MathUtils.clamp(pitchCmd + this.KEY_BLEND, -1, 1);
+    if (keys.KeyS || keys.ArrowDown) pitchCmd = THREE.MathUtils.clamp(pitchCmd - this.KEY_BLEND, -1, 1);
+    if (keys.KeyA || keys.ArrowLeft) rollCmd = THREE.MathUtils.clamp(rollCmd + this.KEY_BLEND, -1, 1);
+    if (keys.KeyD || keys.ArrowRight) rollCmd = THREE.MathUtils.clamp(rollCmd - this.KEY_BLEND, -1, 1);
+    if (keys.KeyQ) yawCmd = 1;
+    if (keys.KeyE) yawCmd = -1;
+
+    if (keys.ShiftLeft || keys.ShiftRight) {
+      this.throttleTarget = Math.min(1, this.throttleTarget + 0.6 * dt);
+    }
+    if (keys.ControlLeft || keys.ControlRight) {
+      this.throttleTarget = Math.max(0.08, this.throttleTarget - 0.6 * dt);
+    }
+
+    this.pitchRate = approach(this.pitchRate, pitchCmd * this.MAX_PITCH, this.INPUT_LERP * this.MAX_PITCH, dt);
+    this.rollRate = approach(this.rollRate, rollCmd * this.MAX_ROLL, this.INPUT_LERP * this.MAX_ROLL, dt);
+    this.yawRate = approach(this.yawRate, yawCmd * this.MAX_YAW, this.INPUT_LERP * this.MAX_YAW, dt);
+    this.throttle = approach(this.throttle, this.throttleTarget, this.THROTTLE_LERP, dt);
+
+    if (this.boostTimer > 0) {
+      this.boostTimer -= dt;
+      if (this.boostTimer <= 0) this.boosting = false;
+    }
+  }
+
+  updateAttitude(dt) {
+    this.root.rotateZ(this.rollRate * dt);
+    this.root.rotateX(this.pitchRate * dt);
+    this.root.rotateY(this.yawRate * dt);
+
+    this._right.set(1, 0, 0).applyQuaternion(this.root.quaternion);
+    const bank = Math.asin(THREE.MathUtils.clamp(this._right.y, -1, 1));
+    this.root.rotateOnWorldAxis(
+      this._worldUp,
+      Math.sin(bank) * this.BANK_TURN * (0.35 + this.throttle) * dt
+    );
+  }
+
+  updatePhysics(dt) {
+    this.telemetry = this.model.integrate(
+      dt, this.root, this.velocity, this.throttle, this.boosting
+    );
+
+    const y = this.root.position.y;
+    if (y < 2) {
+      return { waterCrash: true, lowAlt: true, foam: 1 };
+    }
+    if (y < 15) {
+      return { waterCrash: false, lowAlt: true, foam: (15 - y) / 13 };
+    }
+    return { waterCrash: false, lowAlt: false, foam: 0 };
+  }
+
+  updateExhaust(exhaustLight) {
+    const thr = this.throttle;
+    const thrDelta = thr - this.prevThrottle;
+    this.prevThrottle = thr;
+    this.mesh.children.forEach((c) => {
+      if (c.userData.isExhaust) {
+        const boost = (thr > 0.85 || this.boosting) ? 1.35 : 1;
+        c.material.opacity = 0.25 + thr * 0.75;
+        c.scale.set((0.55 + thr * 0.7) * boost, (0.5 + thr * 1.8) * boost, (0.55 + thr * 0.7) * boost);
+        c.material.color.setHex(
+          this.boosting || thr > 0.85 ? 0xb8ddff : thr > 0.55 ? 0xffaa44 : 0xff5522
+        );
+      }
+    });
+    const fwd = this.getForward();
+    exhaustLight.position.copy(this.root.position).addScaledVector(fwd, -3);
+    exhaustLight.intensity = thr * (4.5 + thr * 3) + (this.boosting ? 3 : 0);
+    exhaustLight.color.setHex(this.boosting || thr > 0.85 ? 0x88bbff : 0xff6622);
+    return thrDelta;
+  }
+
+  getRollAmount() {
+    this._right.set(1, 0, 0).applyQuaternion(this.root.quaternion);
+    return Math.asin(THREE.MathUtils.clamp(this._right.y, -1, 1));
+  }
+}
+
+// ═══════════════════════════════════════
+//  LockOn — 視野中央圓錐／NDC 鎖定（AC 風格）
+//  追蹤(綠)→維持 1.5s→硬鎖(紅)；離圈即重置進度
+//  硬鎖後離圈保留 ~0.75s grace 再丟失（短暫保持）
+// ═══════════════════════════════════════
+class LockOn {
+  constructor(camera) {
+    this.camera = camera;
+    /** 畫面中央鎖定半徑（相對較短邊的比例，約準星圈大小） */
+    this.screenRadius = 0.14;
+    this.lockDuration = 1.5;
+    this.graceAfterLock = 0.75;
+    this.maxRange = 520;
+    this.centerY = 0.42;
+
+    this.candidate = null;
+    this.lockedTarget = null;
+    this.progress = 0;
+    this.grace = 0;
+    this.state = 'none'; // none | tracking | locked
+    this._tickAcc = 0;
+    this._wasLocked = false;
+
+    this._v = new THREE.Vector3();
+    this._ndc = new THREE.Vector3();
+    this.frustum = new THREE.Frustum();
+    this._mat = new THREE.Matrix4();
+  }
+
+  reset() {
+    this.candidate = null;
+    this.lockedTarget = null;
+    this.progress = 0;
+    this.grace = 0;
+    this.state = 'none';
+    this._tickAcc = 0;
+    this._wasLocked = false;
+    this._paintHud();
+  }
+
+  /** @returns {{ x:number, y:number, z:number, visible:boolean }|null} NDC 類似座標，中心為 (0,0) */
+  projectEnemy(mesh) {
+    if (!mesh?.parent) return null;
+    this._v.copy(mesh.position);
+    this._v.project(this.camera);
+    if (this._v.z > 1) return null; // 相機後方
+    return { x: this._v.x, y: this._v.y, z: this._v.z, visible: true };
+  }
+
+  _inLockCone(ndc, dist) {
+    if (!ndc || dist > this.maxRange) return false;
+    // 將 Y 對齊準星中心（約 42% 高度）：NDC y=1 為頂，畫面中心 y≈ 1-2*0.42
+    const cy = 1 - 2 * this.centerY; // ≈ 0.16
+    const aspect = innerWidth / Math.max(1, innerHeight);
+    const dx = ndc.x * aspect;
+    const dy = ndc.y - cy;
+    const r = Math.hypot(dx, dy);
+    return r <= this.screenRadius * 2 && ndc.z > -1 && ndc.z < 1;
+  }
+
+  _alive(target) {
+    return !!(target && target.parent);
+  }
+
+  /**
+   * @returns {{ state:string, progress:number, candidate:object|null, locked:object|null }}
+   */
+  update(dt, enemies, playerPos) {
+    this.camera.updateMatrixWorld();
+    this._mat.multiplyMatrices(this.camera.projectionMatrix, this.camera.matrixWorldInverse);
+    this.frustum.setFromProjectionMatrix(this._mat);
+
+    let best = null;
+    let bestScore = Infinity;
+
+    for (const e of enemies) {
+      if (!this._alive(e)) continue;
+      const dist = playerPos.distanceTo(e.position);
+      if (dist > this.maxRange) continue;
+      if (!this.frustum.containsPoint(e.position)) continue;
+      const ndc = this.projectEnemy(e);
+      if (!ndc || !this._inLockCone(ndc, dist)) continue;
+      const cy = 1 - 2 * this.centerY;
+      const aspect = innerWidth / Math.max(1, innerHeight);
+      const score = Math.hypot(ndc.x * aspect, ndc.y - cy) + dist * 0.00015;
+      if (score < bestScore) {
+        bestScore = score;
+        best = e;
+      }
+    }
+
+    const hardAlive = this._alive(this.lockedTarget);
+    const hardInCone = hardAlive && (() => {
+      const ndc = this.projectEnemy(this.lockedTarget);
+      const dist = playerPos.distanceTo(this.lockedTarget.position);
+      return ndc && this._inLockCone(ndc, dist) && this.frustum.containsPoint(this.lockedTarget.position);
+    })();
+
+    // —— 已硬鎖 ——
+    if (this.state === 'locked' && hardAlive) {
+      if (hardInCone) {
+        this.grace = this.graceAfterLock;
+        this.candidate = this.lockedTarget;
+      } else {
+        this.grace -= dt;
+        if (this.grace <= 0) {
+          this.lockedTarget = null;
+          this.candidate = null;
+          this.progress = 0;
+          this.state = 'none';
+          this._wasLocked = false;
+        }
+      }
+      this._paintHud();
+      return this.snapshot();
+    }
+
+    if (this.state === 'locked' && !hardAlive) {
+      this.reset();
+      return this.snapshot();
+    }
+
+    // —— 追蹤累積 ——
+    if (best) {
+      if (this.candidate !== best) {
+        this.candidate = best;
+        this.progress = 0;
+        this.state = 'tracking';
+      }
+      this.progress = Math.min(1, this.progress + dt / this.lockDuration);
+      this.state = 'tracking';
+
+      this._tickAcc += dt;
+      if (this._tickAcc >= 0.28 && this.progress < 1) {
+        this._tickAcc = 0;
+        AudioFX.lockTick();
+      }
+
+      if (this.progress >= 1) {
+        this.lockedTarget = this.candidate;
+        this.state = 'locked';
+        this.grace = this.graceAfterLock;
+        if (!this._wasLocked) {
+          this._wasLocked = true;
+          AudioFX.lockTone();
+        }
+      }
+    } else {
+      this.candidate = null;
+      this.progress = 0;
+      this.state = 'none';
+      this._wasLocked = false;
+      this.lockedTarget = null;
+      this._tickAcc = 0;
+    }
+
+    this._paintHud();
+    return this.snapshot();
+  }
+
+  snapshot() {
+    return {
+      state: this.state,
+      progress: this.progress,
+      candidate: this.candidate,
+      locked: this.state === 'locked' ? this.lockedTarget : null,
+    };
+  }
+
+  /** 發射時取得導引目標：僅硬鎖才回傳 */
+  getFireTarget() {
+    return this.state === 'locked' && this._alive(this.lockedTarget) ? this.lockedTarget : null;
+  }
+
+  _paintHud() {
+    const circle = document.getElementById('lock-circle');
+    const status = document.getElementById('lock-status');
+    if (!circle || !status) return;
+    circle.classList.remove('tracking', 'locked');
+    status.classList.remove('tracking', 'locked');
+    if (this.state === 'locked') {
+      circle.classList.add('locked');
+      status.classList.add('locked');
+      status.textContent = 'LOCK ON';
+    } else if (this.state === 'tracking') {
+      circle.classList.add('tracking');
+      status.classList.add('tracking');
+      status.textContent = `TRACKING ${Math.floor(this.progress * 100)}%`;
+    } else {
+      status.textContent = 'NO LOCK';
+    }
+  }
+}
+
+// ═══════════════════════════════════════
+//  WeaponSystem — 機砲過熱 + 飛彈彈藥／導引參數
+// ═══════════════════════════════════════
+class WeaponSystem {
+  constructor() {
+    this.missiles = 6;
+    this.maxMissiles = 12;
+    this.missileCd = 0;
+    this.missileCdMax = 1.8;
+
+    this.gunHeat = 0;
+    this.gunOverheated = false;
+    this.gunFireInterval = 0.07;
+    this.gunFireAcc = 0;
+    /** 連續射擊約 3 秒過熱 */
+    this.heatPerSecond = 1 / 3;
+    /** 過熱後冷卻約 2.4 秒才能再射 */
+    this.coolWhileOverheat = 1 / 2.4;
+    this.coolWhileIdle = 0.42;
+    this.coolWhileFiring = 0;
+
+    // 飛彈飛行參數
+    this.mslAccel = 95;
+    this.mslMaxSpeed = 210;
+    this.mslInitialSpeed = 55;
+    this.mslMaxTurnRate = 1.55; // rad/s ≈ 89°/s，禁止瞬間 180°
+    this.mslLife = 4.5;
+    this.mslBlindLife = 3.2;
+    this.mslHitRadius = 6.5;
+
+    this.ammoEl = document.getElementById('ammo');
+    this.heatFill = document.getElementById('heat-fill');
+    this.heatBar = document.getElementById('heat-bar');
+    this.gunCd = document.getElementById('gun-cd');
+    this.gunAbility = document.getElementById('gun-ability');
+    this.mslCdEl = document.getElementById('missile-cd');
+    this.syncAmmoHud();
+  }
+
+  reset() {
+    this.missiles = 6;
+    this.missileCd = 0;
+    this.gunHeat = 0;
+    this.gunOverheated = false;
+    this.gunFireAcc = 0;
+    this.syncAmmoHud();
+    this.syncHeatHud();
+    if (this.mslCdEl) this.mslCdEl.textContent = 'MSL';
+  }
+
+  syncAmmoHud() {
+    if (this.ammoEl) this.ammoEl.textContent = String(this.missiles);
+  }
+
+  syncHeatHud() {
+    if (!this.heatFill || !this.heatBar || !this.gunCd) return;
+    const pct = Math.min(100, this.gunHeat * 100);
+    this.heatFill.style.width = `${pct}%`;
+    this.heatBar.classList.toggle('hot', this.gunHeat > 0.55 && !this.gunOverheated);
+    this.heatBar.classList.toggle('oh', this.gunOverheated);
+    this.gunAbility?.classList.toggle('overheat', this.gunOverheated);
+    this.gunCd.textContent = this.gunOverheated ? 'OVERHEAT' : 'GUN';
+  }
+
+  update(dt) {
+    if (this.missileCd > 0) {
+      this.missileCd = Math.max(0, this.missileCd - dt);
+      if (this.mslCdEl) {
+        this.mslCdEl.textContent = this.missileCd > 0 ? this.missileCd.toFixed(1) : 'MSL';
+      }
+    }
+  }
+
+  /**
+   * 機砲過熱更新；firing=true 表示本幀正按住 Space
+   * @returns {boolean} 是否允許本幀開火
+   */
+  updateGun(dt, firing) {
+    if (this.gunOverheated) {
+      this.gunHeat = Math.max(0, this.gunHeat - this.coolWhileOverheat * dt);
+      if (this.gunHeat <= 0.02) {
+        this.gunHeat = 0;
+        this.gunOverheated = false;
+      }
+      this.gunFireAcc = 0;
+      this.syncHeatHud();
+      return false;
+    }
+
+    if (firing) {
+      this.gunHeat = Math.min(1, this.gunHeat + this.heatPerSecond * dt);
+      if (this.gunHeat >= 1) {
+        this.gunHeat = 1;
+        this.gunOverheated = true;
+        AudioFX.overheat();
+        this.gunFireAcc = 0;
+        this.syncHeatHud();
+        return false;
+      }
+      this.gunFireAcc += dt;
+      const canFire = this.gunFireAcc >= this.gunFireInterval;
+      if (canFire) this.gunFireAcc = 0;
+      this.syncHeatHud();
+      return canFire;
+    }
+
+    this.gunHeat = Math.max(0, this.gunHeat - this.coolWhileIdle * dt);
+    this.gunFireAcc = 0;
+    this.syncHeatHud();
+    return false;
+  }
+
+  canFireMissile() {
+    return this.missiles > 0 && this.missileCd <= 0;
+  }
+
+  consumeMissile() {
+    this.missiles--;
+    this.missileCd = this.missileCdMax;
+    this.syncAmmoHud();
+    if (this.mslCdEl) this.mslCdEl.textContent = this.missileCd.toFixed(1);
+  }
+
+  addMissiles(n) {
+    this.missiles = Math.min(this.maxMissiles, this.missiles + n);
+    this.syncAmmoHud();
+  }
+}
+
+// ═══════════════════════════════════════
+//  WorldHUD — 3D→2D 投影框（敵機／航點）
+// ═══════════════════════════════════════
+class WorldHUD {
+  constructor(camera) {
+    this.camera = camera;
+    this.root = document.getElementById('world-hud');
+    this._v = new THREE.Vector3();
+    this._pool = [];
+  }
+
+  _acquire() {
+    let el = this._pool.pop();
+    if (!el) {
+      el = document.createElement('div');
+      el.className = 'wh-box';
+      el.innerHTML = '<div class="bracket"><span class="tag"></span></div><span class="lbl"></span>';
+      this.root.appendChild(el);
+    }
+    el.style.display = 'block';
+    return el;
+  }
+
+  _releaseAll(used) {
+    const keep = new Set(used);
+    for (const child of [...this.root.children]) {
+      if (!keep.has(child)) {
+        child.style.display = 'none';
+        this._pool.push(child);
+      }
+    }
+  }
+
+  /**
+   * 世界座標 → DOM 像素（NDC 正確翻轉 Y；相機後方隱藏）
+   * @returns {{ x:number, y:number, off:boolean }|null}
+   */
+  projectToScreen(worldPos) {
+    this._v.copy(worldPos).project(this.camera);
+    // Three.js NDC：相機後方通常 z > 1
+    if (this._v.z > 1) return null;
+    const w = innerWidth;
+    const h = innerHeight;
+    let x = (this._v.x * 0.5 + 0.5) * w;
+    let y = (-this._v.y * 0.5 + 0.5) * h;
+    let off = false;
+    if (x < -40 || x > w + 40 || y < -40 || y > h + 40) {
+      off = true;
+      const cx = w * 0.5, cy = h * 0.42;
+      const ang = Math.atan2(y - cy, x - cx);
+      const pad = 28;
+      const rx = w * 0.5 - pad;
+      const ry = h * 0.5 - pad;
+      const c = Math.cos(ang), s = Math.sin(ang);
+      const t = 1 / Math.sqrt((c * c) / (rx * rx) + (s * s) / (ry * ry));
+      x = cx + c * t;
+      y = cy + s * t;
+    }
+    return { x, y, off };
+  }
+
+  /**
+   * @param {THREE.Object3D[]} enemies
+   * @param {THREE.Vector3[]} waypoints
+   * @param {THREE.Vector3} playerPos
+   * @param {{ candidate:object|null, locked:object|null, state:string }} lockSnap
+   */
+  update(enemies, waypoints, playerPos, lockSnap) {
+    if (!this.root) return;
+    const used = [];
+
+    const place = (worldPos, opts) => {
+      const scr = this.projectToScreen(worldPos);
+      if (!scr) return; // 相機後方：隱藏
+      const el = this._acquire();
+      el.className = `wh-box ${opts.cls}${scr.off ? ' offscreen' : ''}`;
+      el.style.left = `${scr.x}px`;
+      el.style.top = `${scr.y}px`;
+      el.querySelector('.tag').textContent = opts.tag;
+      el.querySelector('.lbl').textContent = opts.lbl;
+      used.push(el);
+    };
+
+    // 航點
+    waypoints.forEach((wp, i) => {
+      const dist = Math.floor(playerPos.distanceTo(wp));
+      place(wp, {
+        cls: `wp${i === 0 ? ' current' : ''}`,
+        tag: '[  ]',
+        lbl: i === 0 ? `WP ${dist}m` : `W${i + 1} ${dist}m`,
+      });
+    });
+
+    // 敵機：鎖定／追蹤必投影；其餘近距離或畫面內
+    for (const e of enemies) {
+      if (!e.parent) continue;
+      const dist = playerPos.distanceTo(e.position);
+      const isLocked = lockSnap.locked === e;
+      const isTrack = lockSnap.candidate === e && lockSnap.state === 'tracking';
+      if (!isLocked && !isTrack && dist > 380) {
+        this._v.copy(e.position).project(this.camera);
+        if (this._v.z > 1 || Math.abs(this._v.x) > 1.15 || Math.abs(this._v.y) > 1.15) continue;
+      }
+      let cls = 'enemy';
+      if (isLocked) cls += ' locked';
+      else if (isTrack) cls += ' tracking';
+      place(e.position, {
+        cls,
+        tag: isLocked ? '[!!]' : '[  ]',
+        lbl: `${isLocked ? 'TGT' : 'ENM'} ${Math.floor(dist)}m`,
+      });
+    }
+
+    this._releaseAll(used);
+  }
+
+  clear() {
+    if (!this.root) return;
+    for (const child of [...this.root.children]) {
+      child.style.display = 'none';
+      this._pool.push(child);
+    }
+  }
+}
+
+// ═══════════════════════════════════════
+//  模型／場景建構（純函式，不依賴產品狀態）
+// ═══════════════════════════════════════
+function createJet(palette = { body: 0x8b939e, dark: 0x2e3540, accent: 0x4a5568, glow: 0xff6622 }) {
+  const jet = new THREE.Group();
+  const bodyMat = new THREE.MeshStandardMaterial({ color: palette.body, metalness: 0.75, roughness: 0.32 });
+  const darkMat = new THREE.MeshStandardMaterial({ color: palette.dark, metalness: 0.6, roughness: 0.4 });
+  const accentMat = new THREE.MeshStandardMaterial({ color: palette.accent, metalness: 0.7, roughness: 0.35 });
+  const glassMat = new THREE.MeshPhysicalMaterial({
+    color: 0x1a3048, metalness: 0.1, roughness: 0.05, transmission: 0.55, thickness: 0.5, transparent: true, opacity: 0.85,
+  });
+
+  const fuse = new THREE.Mesh(new THREE.CapsuleGeometry(0.42, 4.2, 6, 12), bodyMat);
+  fuse.rotation.z = Math.PI / 2; fuse.position.z = 0.1; jet.add(fuse);
+  const nose = new THREE.Mesh(new THREE.ConeGeometry(0.38, 2.0, 10), bodyMat);
+  nose.rotation.x = -Math.PI / 2; nose.position.z = -3.35; jet.add(nose);
+  const radome = new THREE.Mesh(new THREE.SphereGeometry(0.36, 10, 8), accentMat);
+  radome.scale.set(1, 1, 1.3); radome.position.z = -4.1; jet.add(radome);
+  const canopy = new THREE.Mesh(new THREE.SphereGeometry(0.48, 12, 8, 0, Math.PI * 2, 0, Math.PI * 0.55), glassMat);
+  canopy.scale.set(0.85, 0.7, 1.5); canopy.position.set(0, 0.38, -0.9); jet.add(canopy);
+  [-1, 1].forEach((s) => {
+    const intake = new THREE.Mesh(new THREE.BoxGeometry(0.45, 0.35, 1.8), darkMat);
+    intake.position.set(s * 0.55, -0.2, -0.5); jet.add(intake);
+  });
+  const wingShape = new THREE.Shape();
+  wingShape.moveTo(0, 0); wingShape.lineTo(3.6, 2.2); wingShape.lineTo(0.4, 2.9); wingShape.lineTo(0, 0.3); wingShape.closePath();
+  const wingGeo = new THREE.ExtrudeGeometry(wingShape, { depth: 0.07, bevelEnabled: true, bevelThickness: 0.02, bevelSize: 0.02, bevelSegments: 1 });
+  const wingL = new THREE.Mesh(wingGeo, bodyMat);
+  wingL.rotation.set(Math.PI / 2, 0, Math.PI / 2); wingL.position.set(0, -0.08, -0.3); jet.add(wingL);
+  const wingR = wingL.clone(); wingR.scale.x = -1; jet.add(wingR);
+  [-1, 1].forEach((s) => {
+    const tip = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.5, 0.8), accentMat);
+    tip.position.set(s * 3.5, 0.1, 1.5); tip.rotation.z = s * 0.15; jet.add(tip);
+  });
+  [-1, 1].forEach((s) => {
+    const vt = new THREE.Mesh(new THREE.BoxGeometry(0.07, 1.4, 1.5), darkMat);
+    vt.position.set(s * 0.55, 0.75, 2.3); vt.rotation.z = s * -0.25; vt.rotation.x = -0.12; jet.add(vt);
+  });
+  [-1, 1].forEach((s) => {
+    const ht = new THREE.Mesh(new THREE.BoxGeometry(1.8, 0.05, 0.75), darkMat);
+    ht.position.set(s * 1.1, 0.12, 2.5); jet.add(ht);
+  });
+  [-1, 1].forEach((s) => {
+    const nacelle = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.34, 1.8, 10), darkMat);
+    nacelle.rotation.x = Math.PI / 2; nacelle.position.set(s * 0.48, -0.18, 1.9); jet.add(nacelle);
+    const nozzle = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.22, 0.28, 0.35, 10),
+      new THREE.MeshStandardMaterial({ color: 0x1a1a1a, metalness: 0.9, roughness: 0.2, emissive: 0x331100, emissiveIntensity: 0.3 })
+    );
+    nozzle.rotation.x = Math.PI / 2; nozzle.position.set(s * 0.48, -0.18, 2.85); jet.add(nozzle);
+    const flame = new THREE.Mesh(
+      new THREE.ConeGeometry(0.2, 1.2, 8),
+      new THREE.MeshBasicMaterial({ color: palette.glow, transparent: true, opacity: 0.85, blending: THREE.AdditiveBlending, depthWrite: false })
+    );
+    flame.rotation.x = Math.PI / 2; flame.position.set(s * 0.48, -0.18, 3.5);
+    flame.userData.isExhaust = true; jet.add(flame);
+    const core = new THREE.Mesh(
+      new THREE.ConeGeometry(0.08, 0.7, 6),
+      new THREE.MeshBasicMaterial({ color: 0xffeecc, transparent: true, opacity: 0.95, blending: THREE.AdditiveBlending, depthWrite: false })
+    );
+    core.rotation.x = Math.PI / 2; core.position.set(s * 0.48, -0.18, 3.25);
+    core.userData.isExhaust = true; jet.add(core);
+  });
+  [-1, 1].forEach((s) => {
+    const msl = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.07, 1.3, 6), new THREE.MeshStandardMaterial({ color: 0xc8c8c8, metalness: 0.8, roughness: 0.25 }));
+    msl.rotation.x = Math.PI / 2; msl.position.set(s * 1.6, -0.35, 0.3); jet.add(msl);
+  });
+  const belly = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.15, 3.5), accentMat);
+  belly.position.set(0, -0.4, 0); jet.add(belly);
+  jet.rotation.y = Math.PI;
+  return jet;
+}
+
+// ═══════════════════════════════════════
+//  Object Pools — 子彈／導彈／爆炸，避免 animate 中 new Mesh
+// ═══════════════════════════════════════
+class BulletPool {
+  constructor(scene, capacity = BULLET_POOL_SIZE) {
+    this.scene = scene;
+    this.free = [];
+    this.active = [];
+    const geo = new THREE.CapsuleGeometry(0.08, 0.6, 2, 4);
+    for (let i = 0; i < capacity; i++) {
+      const mat = new THREE.MeshBasicMaterial({ color: 0xffff66, blending: THREE.AdditiveBlending });
+      const m = new THREE.Mesh(geo, mat);
+      m.visible = false;
+      m.userData = {
+        alive: false,
+        velocity: new THREE.Vector3(),
+        life: 0,
+        team: 'player',
+        damage: 1,
+      };
+      scene.add(m);
+      this.free.push(m);
+    }
+  }
+
+  spawn(origin, quat, velocity, { team = 'player', life = 2, damage = 1, color = 0xffff66 } = {}) {
+    const m = this.free.pop();
+    if (!m) return null;
+    m.visible = true;
+    m.position.copy(origin);
+    m.quaternion.copy(quat);
+    m.material.color.setHex(color);
+    const ud = m.userData;
+    ud.alive = true;
+    ud.velocity.copy(velocity);
+    ud.life = life;
+    ud.team = team;
+    ud.damage = damage;
+    this.active.push(m);
+    return m;
+  }
+
+  release(m) {
+    if (!m.userData.alive) return;
+    m.userData.alive = false;
+    m.visible = false;
+    const idx = this.active.indexOf(m);
+    if (idx >= 0) this.active.splice(idx, 1);
+    this.free.push(m);
+  }
+
+  releaseAll() {
+    while (this.active.length) this.release(this.active[this.active.length - 1]);
+  }
+}
+
+class MissilePool {
+  constructor(scene, capacity = MISSILE_POOL_SIZE) {
+    this.scene = scene;
+    this.free = [];
+    this.active = [];
+    const geo = new THREE.CylinderGeometry(0.1, 0.14, 1.5, 6);
+    for (let i = 0; i < capacity; i++) {
+      const mat = new THREE.MeshStandardMaterial({
+        color: 0xd0d0d0, metalness: 0.8, roughness: 0.25,
+        emissive: 0x221100, emissiveIntensity: 0.4,
+      });
+      const m = new THREE.Mesh(geo, mat);
+      m.rotation.x = Math.PI / 2;
+      m.visible = false;
+      m.userData = {
+        alive: false,
+        velocity: new THREE.Vector3(),
+        target: null,
+        guided: false,
+        life: 0,
+        smokeT: 0,
+        accel: 95,
+        maxSpeed: 210,
+        maxTurn: 1.55,
+        confused: 0,
+        owner: null,
+      };
+      scene.add(m);
+      this.free.push(m);
+    }
+  }
+
+  spawn(origin, quat, velocity, opts = {}) {
+    const m = this.free.pop();
+    if (!m) return null;
+    m.visible = true;
+    m.position.copy(origin);
+    m.quaternion.copy(quat);
+    const ud = m.userData;
+    ud.alive = true;
+    ud.velocity.copy(velocity);
+    ud.target = opts.target || null;
+    ud.guided = !!opts.guided;
+    ud.life = opts.life ?? 4.5;
+    ud.smokeT = 0;
+    ud.accel = opts.accel ?? 95;
+    ud.maxSpeed = opts.maxSpeed ?? 210;
+    ud.maxTurn = opts.maxTurn ?? 1.55;
+    ud.confused = 0;
+    ud.owner = opts.owner || null;
+    this.active.push(m);
+    return m;
+  }
+
+  release(m) {
+    if (!m.userData.alive) return;
+    m.userData.alive = false;
+    m.userData.target = null;
+    m.userData.guided = false;
+    m.visible = false;
+    const idx = this.active.indexOf(m);
+    if (idx >= 0) this.active.splice(idx, 1);
+    this.free.push(m);
+  }
+
+  releaseAll() {
+    while (this.active.length) this.release(this.active[this.active.length - 1]);
+  }
+}
+
+class ExplosionPool {
+  constructor(scene, capacity = EXPLOSION_POOL_SIZE) {
+    this.scene = scene;
+    this.free = [];
+    this.active = [];
+    const boomGeo = new THREE.SphereGeometry(0.4, 5, 5);
+    const flashGeo = new THREE.SphereGeometry(3.2, 10, 10);
+    for (let i = 0; i < capacity; i++) {
+      const isFlash = i % 5 === 0;
+      const isLight = i % 9 === 0;
+      let mesh;
+      if (isLight) {
+        mesh = new THREE.PointLight(0xff8822, 0, 55, 2);
+      } else {
+        const mat = new THREE.MeshBasicMaterial({
+          color: isFlash ? 0xffeeaa : 0xffaa22,
+          transparent: true,
+          opacity: 0,
+          blending: isFlash ? THREE.AdditiveBlending : THREE.AdditiveBlending,
+          depthWrite: false,
+        });
+        mesh = new THREE.Mesh(isFlash ? flashGeo : boomGeo, mat);
+        mesh.visible = false;
+      }
+      mesh.userData = {
+        alive: false,
+        vel: new THREE.Vector3(),
+        life: 0,
+        maxLife: 1,
+        drag: 1,
+        type: isLight ? 'light' : isFlash ? 'flash' : 'boom',
+        grow: 1,
+        fadeNear: false,
+      };
+      scene.add(mesh);
+      this.free.push(mesh);
+    }
+  }
+
+  _take() {
+    return this.free.pop() || null;
+  }
+
+  _activate(mesh, pos, opts) {
+    const ud = mesh.userData;
+    ud.alive = true;
+    ud.vel.copy(opts.vel || new THREE.Vector3());
+    ud.life = opts.life;
+    ud.maxLife = opts.life;
+    ud.drag = opts.drag ?? 1;
+    ud.type = opts.type;
+    ud.grow = opts.grow ?? 1;
+    ud.fadeNear = !!opts.fadeNear;
+    if (mesh.position) mesh.position.copy(pos);
+    if (mesh.isLight) {
+      mesh.intensity = opts.intensity ?? 8;
+      mesh.distance = opts.distance ?? 55;
+    } else {
+      mesh.visible = true;
+      mesh.scale.setScalar(opts.scale ?? 1);
+      if (mesh.material) {
+        if (opts.color != null) mesh.material.color.setHex(opts.color);
+        mesh.material.opacity = opts.opacity ?? 1;
+        mesh.material.blending = opts.blending ?? THREE.AdditiveBlending;
+      }
+    }
+    this.active.push(mesh);
+    return mesh;
+  }
+
+  spawnBoom(pos, scale = 1) {
+    const colors = [0xffaa22, 0xff6600, 0xffee88, 0xff3300];
+    const n = Math.min(14, this.free.length);
+    for (let i = 0; i < n; i++) {
+      const mesh = this._take();
+      if (!mesh || mesh.isLight) {
+        if (mesh) this.free.push(mesh);
+        continue;
+      }
+      const isSmoke = i > 9;
+      this._activate(mesh, pos, {
+        type: 'boom',
+        life: isSmoke ? 0.9 : 0.55,
+        drag: isSmoke ? 0.9 : 0.95,
+        grow: isSmoke ? 0.9 : 2.2,
+        scale: (isSmoke ? 0.45 : 0.38) * scale,
+        color: isSmoke ? 0x333333 : colors[i % 4],
+        opacity: isSmoke ? 0.28 : 1,
+        blending: isSmoke ? THREE.NormalBlending : THREE.AdditiveBlending,
+        vel: new THREE.Vector3(
+          (Math.random() - 0.5) * 36 * scale,
+          Math.random() * 26 * scale,
+          (Math.random() - 0.5) * 36 * scale
+        ),
+      });
+    }
+    const flash = this._take();
+    if (flash && !flash.isLight) {
+      this._activate(flash, pos, {
+        type: 'flash', life: 0.18, drag: 1, grow: 0,
+        scale: 3.2 * scale, color: 0xffeeaa, opacity: 0.9,
+      });
+    } else if (flash) {
+      this.free.push(flash);
+    }
+    const light = this.free.find((m) => m.isLight && !m.userData.alive);
+    if (light) {
+      const idx = this.free.indexOf(light);
+      this.free.splice(idx, 1);
+      this._activate(light, pos, {
+        type: 'light', life: 0.35, drag: 1, grow: 0,
+        intensity: 8 * scale, distance: 55 * scale,
+      });
+    }
+  }
+
+  spawnMuzzle(pos) {
+    const mesh = this._take();
+    if (!mesh || mesh.isLight) {
+      if (mesh) this.free.push(mesh);
+      return;
+    }
+    this._activate(mesh, pos, {
+      type: 'flash', life: 0.06, drag: 1, grow: 0,
+      scale: 0.5, color: 0xffee88, opacity: 0.8,
+    });
+  }
+
+  spawnTrail(pos, isMissile = false) {
+    if (this.active.length > MAX_TRAIL_PARTICLES + 40) return;
+    const mesh = this._take();
+    if (!mesh || mesh.isLight) {
+      if (mesh) this.free.push(mesh);
+      return;
+    }
+    const size = isMissile ? 0.08 : 0.1;
+    const life = isMissile ? 0.45 : 0.55;
+    this._activate(mesh, pos, {
+      type: 'trail',
+      life,
+      drag: 0.96,
+      grow: 0.18,
+      scale: size,
+      color: 0xdce8f8,
+      opacity: isMissile ? 0.18 : 0.22,
+      blending: THREE.NormalBlending,
+      fadeNear: true,
+      vel: new THREE.Vector3((Math.random() - 0.5) * 0.12, 0.08, (Math.random() - 0.5) * 0.12),
+    });
+  }
+
+  spawnFlare(pos, vel) {
+    const mesh = this._take();
+    if (!mesh || mesh.isLight) {
+      if (mesh) this.free.push(mesh);
+      return null;
+    }
+    return this._activate(mesh, pos, {
+      type: 'flare',
+      life: 2.8,
+      drag: 0.985,
+      grow: 0.35,
+      scale: 0.55,
+      color: 0xffaa33,
+      opacity: 0.95,
+      vel: vel || new THREE.Vector3(
+        (Math.random() - 0.5) * 18,
+        (Math.random() - 0.3) * 10,
+        (Math.random() - 0.5) * 18
+      ),
+    });
+  }
+
+  /** 低空海面白沫／水花 */
+  spawnSplash(pos, intensity = 1) {
+    const n = Math.min(3 + Math.floor(intensity * 4), this.free.length);
+    for (let i = 0; i < n; i++) {
+      const mesh = this._take();
+      if (!mesh || mesh.isLight) {
+        if (mesh) this.free.push(mesh);
+        continue;
+      }
+      this._activate(mesh, pos.clone().add(new THREE.Vector3(
+        (Math.random() - 0.5) * 6,
+        0.2 + Math.random() * 1.5,
+        (Math.random() - 0.5) * 6
+      )), {
+        type: 'boom',
+        life: 0.35 + Math.random() * 0.25,
+        drag: 0.92,
+        grow: 1.8,
+        scale: 0.25 + Math.random() * 0.4 * intensity,
+        color: 0xe8f4ff,
+        opacity: 0.55,
+        blending: THREE.AdditiveBlending,
+        vel: new THREE.Vector3(
+          (Math.random() - 0.5) * 12,
+          4 + Math.random() * 14 * intensity,
+          (Math.random() - 0.5) * 12
+        ),
+      });
+    }
+  }
+
+  release(mesh) {
+    if (!mesh.userData.alive) return;
+    mesh.userData.alive = false;
+    if (mesh.isLight) mesh.intensity = 0;
+    else {
+      mesh.visible = false;
+      if (mesh.material) mesh.material.opacity = 0;
+    }
+    const idx = this.active.indexOf(mesh);
+    if (idx >= 0) this.active.splice(idx, 1);
+    this.free.push(mesh);
+  }
+
+  releaseAll() {
+    while (this.active.length) this.release(this.active[this.active.length - 1]);
+  }
+
+  update(dt, cameraPos, playerPos) {
+    for (let i = this.active.length - 1; i >= 0; i--) {
+      const mesh = this.active[i];
+      const p = mesh.userData;
+      p.life -= dt;
+      const k = p.life / p.maxLife;
+      if (p.type === 'light') {
+        mesh.intensity = 8 * Math.max(0, k);
+      } else if (mesh.material) {
+        let opac = k * (p.type === 'trail' ? 0.2 : p.type === 'flash' ? 0.9 : p.type === 'flare' ? 0.95 : 0.5);
+        if (p.fadeNear && mesh.position) {
+          const dCam = mesh.position.distanceTo(cameraPos);
+          if (dCam < 18) opac *= Math.max(0, (dCam - 8) / 10);
+          const dJet = mesh.position.distanceTo(playerPos);
+          if (dJet < 8) opac *= Math.max(0, (dJet - 3) / 5);
+        }
+        mesh.material.opacity = Math.max(0, opac);
+        const grow = p.grow ?? (p.type === 'trail' ? 0.18 : 1.6);
+        if (p.type === 'boom' || p.type === 'trail' || p.type === 'flare') {
+          mesh.scale.multiplyScalar(1 + dt * grow);
+        }
+        if (p.type === 'flash') mesh.scale.setScalar((mesh.scale.x || 1) * (1 + (1 - k) * 0.08) || (1 + (1 - k) * 3));
+        if (p.type === 'flare') {
+          mesh.material.color.setHex(k > 0.5 ? 0xffcc44 : 0xff6622);
+        }
+      }
+      p.vel.multiplyScalar(p.drag);
+      if (mesh.position) mesh.position.addScaledVector(p.vel, dt);
+      if (p.life <= 0) this.release(mesh);
+    }
+  }
+}
+
+// ═══════════════════════════════════════
+//  RadarHUD — 2D Canvas，玩家中心、機頭朝上
+// ═══════════════════════════════════════
+class RadarHUD {
+  constructor(canvas, range = RADAR_RANGE) {
+    this.canvas = canvas;
+    this.ctx = canvas?.getContext('2d') || null;
+    this.range = range;
+    this.sweep = 0;
+    this._fwd = new THREE.Vector3();
+  }
+
+  update(dt, playerRoot, enemies, waypoints, items) {
+    if (!this.ctx || !this.canvas) return;
+    const ctx = this.ctx;
+    const w = this.canvas.width;
+    const h = this.canvas.height;
+    const cx = w * 0.5;
+    const cy = h * 0.5;
+    const radius = Math.min(cx, cy) - 4;
+    this.sweep = (this.sweep + dt * 1.8) % (Math.PI * 2);
+
+    this._fwd.set(0, 0, -1).applyQuaternion(playerRoot.quaternion);
+    const heading = Math.atan2(this._fwd.x, -this._fwd.z);
+    const pp = playerRoot.position;
+
+    ctx.clearRect(0, 0, w, h);
+
+    // 背景
+    const grd = ctx.createRadialGradient(cx, cy, 4, cx, cy, radius);
+    grd.addColorStop(0, 'rgba(20,60,100,0.55)');
+    grd.addColorStop(0.72, 'rgba(4,16,36,0.92)');
+    grd.addColorStop(1, 'rgba(2,8,20,0.98)');
+    ctx.beginPath();
+    ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+    ctx.fillStyle = grd;
+    ctx.fill();
+
+    ctx.strokeStyle = 'rgba(100,180,255,0.22)';
+    ctx.lineWidth = 1;
+    for (const ring of [0.33, 0.66, 1]) {
+      ctx.beginPath();
+      ctx.arc(cx, cy, radius * ring, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+    ctx.beginPath();
+    ctx.moveTo(cx, cy - radius);
+    ctx.lineTo(cx, cy + radius);
+    ctx.moveTo(cx - radius, cy);
+    ctx.lineTo(cx + radius, cy);
+    ctx.strokeStyle = 'rgba(100,180,255,0.12)';
+    ctx.stroke();
+
+    // 掃描扇形
+    ctx.save();
+    ctx.beginPath();
+    ctx.moveTo(cx, cy);
+    ctx.arc(cx, cy, radius, this.sweep - 0.45, this.sweep);
+    ctx.closePath();
+    const sweepGrad = ctx.createRadialGradient(cx, cy, 0, cx, cy, radius);
+    sweepGrad.addColorStop(0, 'rgba(100,200,255,0.28)');
+    sweepGrad.addColorStop(1, 'rgba(100,200,255,0)');
+    ctx.fillStyle = sweepGrad;
+    ctx.fill();
+    ctx.restore();
+
+    // 機頭朝上視野錐
+    ctx.beginPath();
+    ctx.moveTo(cx, cy);
+    ctx.lineTo(cx - 28, cy - 62);
+    ctx.lineTo(cx + 28, cy - 62);
+    ctx.closePath();
+    ctx.fillStyle = 'rgba(100,200,255,0.10)';
+    ctx.fill();
+
+    const project = (wx, wz) => {
+      const dx = wx - pp.x;
+      const dz = wz - pp.z;
+      const dist = Math.hypot(dx, dz);
+      if (dist > this.range) return null;
+      const worldAng = Math.atan2(dx, -dz);
+      const ang = worldAng - heading;
+      const r = (dist / this.range) * (radius - 8);
+      return { x: cx + Math.sin(ang) * r, y: cy - Math.cos(ang) * r, dist };
+    };
+
+    // 航點＝黃星
+    for (let i = 0; i < waypoints.length; i++) {
+      const p = project(waypoints[i].x, waypoints[i].z);
+      if (!p) continue;
+      ctx.save();
+      ctx.translate(p.x, p.y);
+      ctx.beginPath();
+      const ro = i === 0 ? 5 : 3.5;
+      const ri = ro * 0.4;
+      for (let s = 0; s < 5; s++) {
+        const a = (s * 2 * Math.PI) / 5 - Math.PI / 2;
+        const a2 = a + Math.PI / 5;
+        if (s === 0) ctx.moveTo(Math.cos(a) * ro, Math.sin(a) * ro);
+        else ctx.lineTo(Math.cos(a) * ro, Math.sin(a) * ro);
+        ctx.lineTo(Math.cos(a2) * ri, Math.sin(a2) * ri);
+      }
+      ctx.closePath();
+      ctx.fillStyle = i === 0 ? '#ffe066' : '#d4b24a';
+      ctx.shadowColor = '#fa0';
+      ctx.shadowBlur = i === 0 ? 8 : 4;
+      ctx.fill();
+      ctx.restore();
+      ctx.shadowBlur = 0;
+    }
+
+    // 道具＝綠點
+    for (const item of items) {
+      if (!item.parent) continue;
+      const p = project(item.position.x, item.position.z);
+      if (!p) continue;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, 2.8, 0, Math.PI * 2);
+      ctx.fillStyle = '#3f8';
+      ctx.shadowColor = '#2f6';
+      ctx.shadowBlur = 6;
+      ctx.fill();
+      ctx.shadowBlur = 0;
+    }
+
+    // 敵機＝紅點
+    for (const e of enemies) {
+      if (!e.parent) continue;
+      const p = project(e.position.x, e.position.z);
+      if (!p) continue;
+      ctx.save();
+      ctx.translate(p.x, p.y);
+      ctx.rotate(Math.PI / 4);
+      ctx.fillStyle = '#ff4455';
+      ctx.shadowColor = '#f30';
+      ctx.shadowBlur = 6;
+      ctx.fillRect(-3.2, -3.2, 6.4, 6.4);
+      ctx.restore();
+      ctx.shadowBlur = 0;
+    }
+
+    // 玩家三角（朝上＝機頭）
+    ctx.beginPath();
+    ctx.moveTo(cx, cy - 8);
+    ctx.lineTo(cx - 5.5, cy + 6);
+    ctx.lineTo(cx + 5.5, cy + 6);
+    ctx.closePath();
+    ctx.fillStyle = '#9cf';
+    ctx.shadowColor = '#4af';
+    ctx.shadowBlur = 8;
+    ctx.fill();
+    ctx.shadowBlur = 0;
+  }
+}
+
+// ═══════════════════════════════════════
+//  EnemyAI — Patrol / Attack / Evade 狀態機
+// ═══════════════════════════════════════
+class EnemyAI {
+  static ENGAGE = 260;
+  static DISENGAGE = 420;
+  static GUN_RANGE = 175;
+  static GUN_INTERVAL = 0.11;
+  static GUN_DAMAGE = 5;
+  static FLARE_CD = 5.0;
+  static FLARE_BREAK = 0.58;
+  static EVADE_TIME = 2.6;
+  static PATROL_SPEED = 26;
+  static ATTACK_SPEED = 36;
+  static EVADE_SPEED = 52;
+
+  constructor(mesh, homePos) {
+    this.mesh = mesh;
+    this.state = 'patrol';
+    this.patrolPoints = [];
+    this.patrolIdx = 0;
+    this.velocity = new THREE.Vector3(
+      (Math.random() - 0.5) * 20,
+      (Math.random() - 0.5) * 4,
+      -18 - Math.random() * 14
+    );
+    this.gunAcc = 0;
+    this.flareCd = 1 + Math.random() * 2;
+    this.evadeT = 0;
+    this.rollRate = 0;
+    this._fwd = new THREE.Vector3();
+    this._tmp = new THREE.Vector3();
+    this._tmp2 = new THREE.Vector3();
+    this._desired = new THREE.Vector3();
+
+    const base = homePos.clone();
+    for (let i = 0; i < 4; i++) {
+      const a = (i / 4) * Math.PI * 2 + Math.random() * 0.4;
+      const r = 80 + Math.random() * 140;
+      this.patrolPoints.push(new THREE.Vector3(
+        base.x + Math.cos(a) * r,
+        THREE.MathUtils.clamp(base.y + (Math.random() - 0.5) * 40, 25, 140),
+        base.z + Math.sin(a) * r
+      ));
+    }
+  }
+
+  getForward() {
+    return this._fwd.set(0, 0, -1).applyQuaternion(this.mesh.quaternion);
+  }
+
+  _setState(next) {
+    if (this.state === next) return;
+    this.state = next;
+    if (next === 'evade') {
+      this.evadeT = EnemyAI.EVADE_TIME;
+      this.rollRate = (Math.random() > 0.5 ? 1 : -1) * (3.2 + Math.random() * 2.4);
+    }
+  }
+
+  _threatLocked(lockSnap) {
+    if (!lockSnap) return false;
+    return lockSnap.locked === this.mesh ||
+      (lockSnap.candidate === this.mesh && lockSnap.state === 'tracking' && lockSnap.progress > 0.45);
+  }
+
+  _missileThreat(missiles) {
+    for (const m of missiles) {
+      if (!m.userData.alive || !m.userData.guided) continue;
+      if (m.userData.target !== this.mesh) continue;
+      if (m.position.distanceTo(this.mesh.position) < 160) return m;
+    }
+    return null;
+  }
+
+  deployFlares(explosionPool, missiles) {
+    if (this.flareCd > 0) return;
+    this.flareCd = EnemyAI.FLARE_CD;
+    const pos = this.mesh.position;
+    const back = this.getForward().multiplyScalar(-1);
+    for (let i = 0; i < 7; i++) {
+      const vel = back.clone().multiplyScalar(8 + Math.random() * 14).add(
+        new THREE.Vector3((Math.random() - 0.5) * 22, Math.random() * 12 - 2, (Math.random() - 0.5) * 22)
+      );
+      explosionPool.spawnFlare(pos.clone().addScaledVector(back, 2 + i * 0.4), vel);
+    }
+    // 導彈失鎖機率
+    for (const m of missiles) {
+      const ud = m.userData;
+      if (!ud.alive || !ud.guided || ud.target !== this.mesh) continue;
+      if (Math.random() < EnemyAI.FLARE_BREAK) {
+        ud.guided = false;
+        ud.target = null;
+        ud.confused = 1.2;
+      } else {
+        ud.confused = Math.max(ud.confused || 0, 0.6);
+      }
+    }
+  }
+
+  /**
+   * @param {object} ctx { dt, player, lockSnap, missiles, bulletPool, explosionPool }
+   */
+  update(ctx) {
+    const { dt, player, lockSnap, missiles, bulletPool, explosionPool } = ctx;
+    const mesh = this.mesh;
+    const toPlayer = this._tmp.copy(player.position).sub(mesh.position);
+    const dist = toPlayer.length();
+    this.flareCd = Math.max(0, this.flareCd - dt);
+
+    const locked = this._threatLocked(lockSnap);
+    const inbound = this._missileThreat(missiles);
+
+    // —— 狀態轉換 ——
+    if (locked || inbound) {
+      this._setState('evade');
+      if (inbound || locked) this.deployFlares(explosionPool, missiles);
+    } else if (this.state === 'evade') {
+      this.evadeT -= dt;
+      if (this.evadeT <= 0 && !locked && !inbound) {
+        this._setState(dist < EnemyAI.ENGAGE ? 'attack' : 'patrol');
+      }
+    } else if (dist < EnemyAI.ENGAGE) {
+      this._setState('attack');
+    } else if (dist > EnemyAI.DISENGAGE) {
+      this._setState('patrol');
+    }
+
+    // —— 行為 ——
+    if (this.state === 'patrol') {
+      const wp = this.patrolPoints[this.patrolIdx];
+      this._desired.copy(wp).sub(mesh.position);
+      if (this._desired.length() < 28) {
+        this.patrolIdx = (this.patrolIdx + 1) % this.patrolPoints.length;
+      }
+      this._steerToward(this._desired, EnemyAI.PATROL_SPEED, dt, 1.1);
+      // 輕微高度起伏
+      mesh.position.y += Math.sin(performance.now() * 0.001 + mesh.id) * 0.02;
+    } else if (this.state === 'attack') {
+      // 追擊但不永遠直線：側向切入 + 保持交戰距離帶
+      const ideal = 90;
+      toPlayer.normalize();
+      const side = this._tmp2.crossVectors(toPlayer, new THREE.Vector3(0, 1, 0)).normalize();
+      const offset = side.multiplyScalar(Math.sin(performance.now() * 0.0012 + mesh.id) * 40);
+      this._desired.copy(player.position).add(offset).sub(mesh.position);
+      if (dist < ideal * 0.65) this._desired.addScaledVector(toPlayer, -40);
+      this._steerToward(this._desired, EnemyAI.ATTACK_SPEED, dt, 2.0);
+
+      // 開火：朝向玩家且在射程內
+      this.gunAcc += dt;
+      const fwd = this.getForward();
+      const aimDot = fwd.dot(toPlayer.normalize());
+      if (dist < EnemyAI.GUN_RANGE && aimDot > 0.72 && this.gunAcc >= EnemyAI.GUN_INTERVAL) {
+        this.gunAcc = 0;
+        const origin = mesh.position.clone().addScaledVector(fwd, 4.5);
+        const vel = fwd.multiplyScalar(2.6 + Math.random() * 0.4);
+        // 輕微預瞄
+        vel.add(player.velocity.clone().multiplyScalar(0.012));
+        bulletPool.spawn(origin, mesh.quaternion, vel, {
+          team: 'enemy',
+          life: 1.6,
+          damage: EnemyAI.GUN_DAMAGE,
+          color: 0xff3344,
+        });
+      }
+    } else if (this.state === 'evade') {
+      // 高 G 滾轉 + 垂直／側向拉出
+      mesh.rotateZ(this.rollRate * dt);
+      const fwd = this.getForward();
+      const up = this._tmp2.set(0, 1, 0).applyQuaternion(mesh.quaternion);
+      this._desired.copy(fwd).multiplyScalar(40)
+        .addScaledVector(up, this.rollRate > 0 ? 35 : -35)
+        .add(new THREE.Vector3((Math.random() - 0.5) * 10, 8, (Math.random() - 0.5) * 10));
+      this._steerToward(this._desired, EnemyAI.EVADE_SPEED, dt, 3.5);
+      if (this.flareCd <= 0.05 && (locked || inbound)) {
+        this.deployFlares(explosionPool, missiles);
+      }
+    }
+
+    // 高度夾制
+    mesh.position.y = THREE.MathUtils.clamp(mesh.position.y, 18, 160);
+  }
+
+  _steerToward(dir, speed, dt, turnMul) {
+    if (dir.lengthSq() < 1e-6) return;
+    dir.normalize();
+    const mesh = this.mesh;
+    // 平滑轉向
+    const lookTarget = this._tmp2.copy(mesh.position).add(dir);
+    const q = new THREE.Quaternion();
+    const m4 = new THREE.Matrix4();
+    m4.lookAt(mesh.position, lookTarget, new THREE.Vector3(0, 1, 0));
+    q.setFromRotationMatrix(m4);
+    // createJet 預設 rotation.y = PI，對齊玩家模型朝向
+    const fix = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.PI);
+    q.multiply(fix);
+    mesh.quaternion.slerp(q, Math.min(1, turnMul * dt));
+    this.velocity.lerp(dir.multiplyScalar(speed), Math.min(1, 2.2 * dt));
+    mesh.position.addScaledVector(this.velocity, dt);
+  }
+}
+
+// ═══════════════════════════════════════
+//  GameCore — 場景、狀態、主迴圈
+// ═══════════════════════════════════════
+class GameCore {
+  constructor() {
+    this.state = GameState.MENU;
+    this.fuel = 100;
+    this.score = 0;
+    this.weaponPower = 1;
+    this.missionTime = 300;
+    this.missionTimeMax = 300;
+    this.boostCd = 0;
+    this.lastHp = 100;
+    this.ringsDone = 0;
+    this.ambientBoomT = 8;
+    this.trailAcc = 0;
+    this.foamAcc = 0;
+    this.lastTime = performance.now();
+    this.reflFrame = 0;
+    this.keys = {};
+
+    this.waypoints = [];
+    this.rings = [];
+    this.enemies = [];
+    this.items = [];
+    this.cloudGroups = [];
+    this.distantCraft = [];
+
+    this.wave = 0;
+    this.kills = 0;
+    this.elapsed = 0;
+    this.waveCooldown = 0;
+    this.pendingWave = false;
+    this.lockSnap = { state: 'none', progress: 0, candidate: null, locked: null };
+
+    this._euler = new THREE.Euler(0, 0, 0, 'YXZ');
+    this._tmp = new THREE.Vector3();
+    this._tmp2 = new THREE.Vector3();
+    this._mslSteer = new THREE.Vector3();
+    this._fwd = new THREE.Vector3();
+
+    this.mouseAim = new MouseAim();
+    this.weapons = new WeaponSystem();
+    this._initRenderer();
+    this._initWorld();
+
+    this.bulletPool = new BulletPool(this.scene);
+    this.missilePool = new MissilePool(this.scene);
+    this.explosionPool = new ExplosionPool(this.scene);
+
+    this.player = new PlayerJet(this.scene);
+    this.cameraRig = new CameraRig(this.camera);
+    this.cameraRig.reset(this.player.position);
+    this.lockOn = new LockOn(this.camera);
+    this.worldHud = new WorldHUD(this.camera);
+    this.radarHud = new RadarHUD(document.getElementById('radar-canvas'), RADAR_RANGE);
+
+    this.speedLines = document.getElementById('speed-lines');
+    this.fxOverlay = document.getElementById('fx-overlay');
+    this.spdChip = document.getElementById('spd-chip');
+    this.compassArrow = document.getElementById('compass-arrow');
+    this.barsEl = document.getElementById('bars');
+    this.pausePanel = document.getElementById('pause-panel');
+    this.endPanel = document.getElementById('end-panel');
+    this.waveToast = document.getElementById('wave-toast');
+
+    this._bindInput();
+    this.spawnWaypoints();
+    this.updateRouteHUD();
+  }
+
+  _initRenderer() {
+    this.scene = new THREE.Scene();
+    this.scene.fog = new THREE.FogExp2(0x1c456e, 0.00048);
+
+    this.camera = new THREE.PerspectiveCamera(BASE_FOV, innerWidth / innerHeight, 0.4, 5500);
+    this.renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+    this.renderer.setSize(innerWidth, innerHeight);
+    this.renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+    this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    this.renderer.toneMappingExposure = 1.12;
+    this.renderer.outputColorSpace = THREE.SRGBColorSpace;
+    document.body.appendChild(this.renderer.domElement);
+
+    this.composer = new EffectComposer(this.renderer);
+    this.composer.addPass(new RenderPass(this.scene, this.camera));
+    this.bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.62, 0.42, 0.82);
+    this.composer.addPass(this.bloom);
+
+    const gradeShader = {
+      uniforms: { tDiffuse: { value: null }, time: { value: 0 }, speed: { value: 0.5 } },
+      vertexShader: `varying vec2 vUv; void main(){ vUv=uv; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0); }`,
+      fragmentShader: `
+        uniform sampler2D tDiffuse; uniform float time; uniform float speed; varying vec2 vUv;
+        void main(){
+          vec2 uv=vUv; vec2 cc=uv-0.5; float dist=dot(cc,cc);
+          float blur=speed*speed;
+          uv+=cc*dist*(0.035+blur*0.06);
+          float radial=blur*blur;
+          vec4 c;
+          if(radial>0.15){
+            vec2 rdir=cc*dist;
+            vec4 a=texture2D(tDiffuse,uv-rdir*radial*0.045);
+            vec4 b=texture2D(tDiffuse,uv);
+            vec4 c2=texture2D(tDiffuse,uv+rdir*radial*0.045);
+            c=mix(b,(a+b+c2)/3.0,clamp(radial*0.85,0.0,0.55));
+          }else{
+            c=texture2D(tDiffuse,uv);
+          }
+          c.rgb=mix(c.rgb,c.rgb*vec3(0.90,0.96,1.10),0.38);
+          float vig=smoothstep(1.05-blur*0.25,0.22,dist*(2.0+blur*1.4));
+          c.rgb*=vig;
+          float streak=pow(max(0.0,abs(cc.x)-0.15),2.0)*blur*0.12;
+          c.rgb+=vec3(0.55,0.75,1.0)*streak;
+          float n=fract(sin(dot(uv+time,vec2(12.9898,78.233)))*43758.5453);
+          c.rgb+=(n-0.5)*(0.014+blur*0.012);
+          gl_FragColor=c;
+        }`,
+    };
+    this.gradePass = new ShaderPass(gradeShader);
+    this.composer.addPass(this.gradePass);
+    this.composer.addPass(new OutputPass());
+  }
+
+  _initWorld() {
+    const scene = this.scene;
+    this.sky = new THREE.Mesh(
+      new THREE.SphereGeometry(4500, 48, 24),
+      new THREE.ShaderMaterial({
+        side: THREE.BackSide, depthWrite: false,
+        uniforms: { sunDir: { value: SUN_DIR.clone() } },
+        vertexShader: `varying vec3 vPos; void main(){ vPos=position; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0); }`,
+        fragmentShader: `
+          uniform vec3 sunDir; varying vec3 vPos;
+          void main(){
+            vec3 d=normalize(vPos); float h=d.y;
+            vec3 col=mix(vec3(0.72,0.48,0.38),vec3(0.22,0.45,0.78),smoothstep(-0.1,0.32,h));
+            col=mix(col,vec3(0.05,0.12,0.32),smoothstep(0.12,0.92,h));
+            float sun=pow(max(0.0,dot(d,sunDir)),52.0);
+            float glow=pow(max(0.0,dot(d,sunDir)),3.5);
+            col+=vec3(1.0,0.78,0.48)*sun*2.0+vec3(1.0,0.58,0.32)*glow*0.42;
+            col+=vec3(0.95,0.6,0.4)*exp(-abs(h)*16.0)*0.28;
+            float band=smoothstep(0.02,0.0,abs(h-0.08))*0.15;
+            col+=vec3(0.4,0.65,1.0)*band;
+            gl_FragColor=vec4(col,1.0);
+          }`,
+      })
+    );
+    scene.add(this.sky);
+
+    this.sunLight = new THREE.DirectionalLight(0xffd0b0, 2.45);
+    this.sunLight.position.set(-120, 70, 90);
+    scene.add(this.sunLight);
+    scene.add(new THREE.AmbientLight(0x3a5888, 0.4));
+    scene.add(new THREE.HemisphereLight(0x7aa0d0, 0x0a2038, 0.62));
+    const fill = new THREE.DirectionalLight(0x7090c8, 0.48);
+    fill.position.set(60, 25, -40); scene.add(fill);
+    const rim = new THREE.DirectionalLight(0xffaa77, 0.35);
+    rim.position.set(40, 10, -80); scene.add(rim);
+
+    this.exhaustLight = new THREE.PointLight(0xff6622, 0, 28, 2);
+    scene.add(this.exhaustLight);
+
+    const reflSize = 512;
+    this.reflectionRT = new THREE.WebGLRenderTarget(reflSize, reflSize, {
+      type: THREE.HalfFloatType, magFilter: THREE.LinearFilter, minFilter: THREE.LinearFilter,
+    });
+    this.reflCamera = new THREE.PerspectiveCamera(55, 1, 0.5, 5500);
+
+    this.waterUniforms = {
+      time: { value: 0 },
+      sunDir: { value: SUN_DIR.clone() },
+      deepColor: { value: new THREE.Color(0x042440) },
+      shallowColor: { value: new THREE.Color(0x0c6888) },
+      camPos: { value: new THREE.Vector3() },
+      tReflection: { value: this.reflectionRT.texture },
+      reflectivity: { value: 0.74 },
+    };
+    this.water = new THREE.Mesh(
+      new THREE.PlaneGeometry(10000, 10000, 160, 160),
+      new THREE.ShaderMaterial({
+        uniforms: this.waterUniforms,
+        transparent: true,
+        vertexShader: `
+          uniform float time;
+          varying vec3 vWorld; varying vec3 vNormal; varying float vWave; varying vec4 vReflPos;
+          void main(){
+            vec3 p=position;
+            float w1=sin(p.x*0.008+time*0.7)*cos(p.y*0.006+time*0.5);
+            float w2=sin(p.x*0.02-time*1.1)*0.4+cos(p.y*0.018+time*0.8)*0.35;
+            p.z+=w1*2.2+w2*1.1; vWave=w1+w2;
+            vec4 world=modelMatrix*vec4(p,1.0); vWorld=world.xyz;
+            float dx=cos(position.x*0.008+time*0.7)*0.008*2.2;
+            float dy=-sin(position.y*0.006+time*0.5)*0.006*2.2;
+            vNormal=normalize(mat3(modelMatrix)*normalize(vec3(-dx,1.0,-dy)));
+            gl_Position=projectionMatrix*viewMatrix*world;
+            vReflPos=gl_Position;
+          }`,
+        fragmentShader: `
+          uniform vec3 deepColor,shallowColor,sunDir,camPos;
+          uniform float time,reflectivity;
+          uniform sampler2D tReflection;
+          varying vec3 vWorld,vNormal; varying float vWave; varying vec4 vReflPos;
+          void main(){
+            vec3 N=normalize(vNormal);
+            vec3 V=normalize(camPos-vWorld);
+            vec3 L=normalize(sunDir);
+            float fresnel=pow(1.0-max(dot(N,V),0.0),2.8);
+            float ndotl=max(dot(N,L),0.0);
+            vec3 base=mix(deepColor,shallowColor,0.42+vWave*0.08+ndotl*0.15);
+            vec2 ndc=(vReflPos.xy/vReflPos.w)*0.5+0.5;
+            vec2 distort=N.xz*0.04+vec2(sin(vWorld.x*0.05+time),cos(vWorld.z*0.05+time))*0.008;
+            vec3 refl=texture2D(tReflection,clamp(ndc+distort,0.001,0.999)).rgb;
+            vec3 H=normalize(L+V);
+            float spec=pow(max(dot(N,H),0.0),180.0);
+            vec3 col=mix(base,refl,fresnel*reflectivity+0.18);
+            col+=vec3(1.0,0.92,0.75)*spec*1.4;
+            col+=shallowColor*exp(-abs(vWorld.y)*0.02)*0.08;
+            gl_FragColor=vec4(col,0.97);
+          }`,
+      })
+    );
+    this.water.rotation.x = -Math.PI / 2;
+    this.water.position.y = 0;
+    scene.add(this.water);
+
+    this.worldDecor = new THREE.Group();
+    scene.add(this.worldDecor);
+    this.routeRibbon = new THREE.Group();
+    scene.add(this.routeRibbon);
+    this.buildWorldDecor();
+  }
+
+  makeIsland(x, z, s = 1, style = 0) {
+    const g = new THREE.Group();
+    const sandCols = [0xc9b896, 0xd4c4a0, 0xb8a878];
+    const hillCols = [0x2a6b38, 0x1e5530, 0x3a7a42, 0x4a6840];
+    const sand = new THREE.Mesh(
+      new THREE.CylinderGeometry(48 * s * (style === 2 ? 0.7 : 1), 58 * s, 3.5 + style, 10 + style * 2),
+      new THREE.MeshStandardMaterial({ color: sandCols[style % 3], roughness: 0.9, metalness: 0.05 })
+    );
+    sand.position.y = 1.5;
+    g.add(sand);
+    if (style !== 2) {
+      const hill = new THREE.Mesh(
+        new THREE.ConeGeometry(28 * s, 18 * s + style * 4, 7),
+        new THREE.MeshStandardMaterial({ color: hillCols[style % 4], roughness: 1, flatShading: true })
+      );
+      hill.position.y = 10 * s; g.add(hill);
+      for (let k = 0; k < 3; k++) {
+        const peak = new THREE.Mesh(
+          new THREE.ConeGeometry(8 * s, 10 * s, 5),
+          new THREE.MeshStandardMaterial({ color: hillCols[(style + k) % 4], roughness: 1, flatShading: true })
+        );
+        peak.position.set((k - 1) * 14 * s, 8 * s, (k % 2) * 8 * s);
+        g.add(peak);
+      }
+    } else {
+      const atoll = new THREE.Mesh(
+        new THREE.TorusGeometry(22 * s, 4 * s, 6, 16),
+        new THREE.MeshStandardMaterial({ color: 0x2a6b50, roughness: 0.95 })
+      );
+      atoll.rotation.x = Math.PI / 2; atoll.position.y = 2; g.add(atoll);
+    }
+    const treeMat = new THREE.MeshStandardMaterial({ color: 0x1a4a28, roughness: 1, flatShading: true });
+    const treeCount = style === 3 ? 4 : 6 + (style === 2 ? 4 : 0);
+    for (let i = 0; i < treeCount; i++) {
+      const t = new THREE.Mesh(new THREE.ConeGeometry(2.2 * s, 7 * s, 5), treeMat);
+      const a = (i / treeCount) * Math.PI * 2 + Math.random();
+      const r = (14 + Math.random() * 22) * s;
+      t.position.set(Math.cos(a) * r, 4 * s, Math.sin(a) * r);
+      g.add(t);
+    }
+    g.position.set(x, 0, z);
+    this.worldDecor.add(g);
+  }
+
+  buildIslands() {
+    for (let i = 0; i < 28; i++) {
+      const ang = Math.random() * Math.PI * 2;
+      const dist = 200 + Math.random() * 1600;
+      this.makeIsland(Math.cos(ang) * dist, Math.sin(ang) * dist - 400, 0.6 + Math.random() * 1.4, i % 4);
+    }
+  }
+
+  buildMountains() {
+    const mat = new THREE.MeshStandardMaterial({ color: 0x1a2a40, roughness: 1, flatShading: true, fog: true });
+    const mat2 = new THREE.MeshStandardMaterial({ color: 0x243550, roughness: 1, flatShading: true });
+    const mat3 = new THREE.MeshStandardMaterial({ color: 0x152030, roughness: 1, flatShading: true });
+    for (let i = 0; i < 18; i++) {
+      const ang = (i / 18) * Math.PI * 2 + Math.random() * 0.15;
+      const dist = 1400 + Math.random() * 700;
+      const h = 220 + Math.random() * 320;
+      const m = new THREE.Mesh(new THREE.ConeGeometry(140 + Math.random() * 180, h, 5 + (Math.random() * 3 | 0)), i % 3 === 0 ? mat3 : i % 2 ? mat : mat2);
+      m.position.set(Math.cos(ang) * dist, h * 0.35, Math.sin(ang) * dist);
+      this.worldDecor.add(m);
+      if (Math.random() > 0.4) {
+        const m2 = new THREE.Mesh(new THREE.ConeGeometry(90 + Math.random() * 120, h * 0.75, 5), mat);
+        m2.position.set(Math.cos(ang + 0.08) * (dist - 80), h * 0.25, Math.sin(ang + 0.08) * (dist - 80));
+        this.worldDecor.add(m2);
+      }
+    }
+  }
+
+  buildClouds() {
+    const cloudGeo = new THREE.SphereGeometry(1, 7, 5);
+    for (let layer = 0; layer < 3; layer++) {
+      const count = layer === 0 ? 28 : layer === 1 ? 36 : 22;
+      for (let i = 0; i < count; i++) {
+        const opac = layer === 0 ? 0.12 + Math.random() * 0.1 : layer === 1 ? 0.18 + Math.random() * 0.16 : 0.08 + Math.random() * 0.1;
+        const mat = new THREE.MeshStandardMaterial({
+          color: 0xe8f0ff, transparent: true, opacity: opac, depthWrite: false, roughness: 1,
+        });
+        const cg = new THREE.Group();
+        const scale = (layer === 0 ? 40 : 22) + Math.random() * (layer === 2 ? 70 : 45);
+        const blobs = 4 + ((Math.random() * 4) | 0);
+        for (let j = 0; j < blobs; j++) {
+          const m = new THREE.Mesh(cloudGeo, mat);
+          m.scale.setScalar(scale * (0.4 + Math.random() * 0.7));
+          m.position.set((Math.random() - 0.5) * scale * 1.8, (Math.random() - 0.5) * scale * 0.4, (Math.random() - 0.5) * scale);
+          cg.add(m);
+        }
+        const yBase = layer === 0 ? 220 : layer === 1 ? 90 : 380;
+        cg.position.set((Math.random() - 0.5) * 4000, yBase + Math.random() * 60, (Math.random() - 0.5) * 4000);
+        cg.userData.drift = 2 + Math.random() * 5;
+        this.worldDecor.add(cg);
+        this.cloudGroups.push(cg);
+      }
+    }
+  }
+
+  buildBuoys() {
+    const poleMat = new THREE.MeshStandardMaterial({ color: 0xcc4422, metalness: 0.4, roughness: 0.5, emissive: 0x441100, emissiveIntensity: 0.3 });
+    const lampMat = new THREE.MeshBasicMaterial({ color: 0xffaa44 });
+    for (let i = 0; i < 18; i++) {
+      const g = new THREE.Group();
+      const body = new THREE.Mesh(new THREE.CylinderGeometry(1.2, 1.8, 4, 6), poleMat);
+      g.add(body);
+      const lamp = new THREE.Mesh(new THREE.SphereGeometry(0.7, 8, 6), lampMat);
+      lamp.position.y = 2.5; g.add(lamp);
+      g.position.set((Math.random() - 0.5) * 1200, 0, -200 - Math.random() * 2000);
+      g.userData.isBuoy = true;
+      this.worldDecor.add(g);
+    }
+  }
+
+  buildDistantPatrol() {
+    for (let f = 0; f < 3; f++) {
+      const form = new THREE.Group();
+      const baseZ = -800 - f * 700;
+      const baseX = (f - 1) * 400;
+      for (let i = 0; i < 4; i++) {
+        const dummy = new THREE.Mesh(
+          new THREE.ConeGeometry(2.5, 10, 4),
+          new THREE.MeshBasicMaterial({ color: 0x334455, transparent: true, opacity: 0.55 })
+        );
+        dummy.rotation.x = Math.PI / 2;
+        dummy.position.set((i - 1.5) * 28, Math.sin(i) * 6, i * 18);
+        form.add(dummy);
+      }
+      form.position.set(baseX, 120 + f * 30, baseZ);
+      form.userData = { speed: 8 + f * 2, phase: f };
+      this.worldDecor.add(form);
+      this.distantCraft.push(form);
+    }
+  }
+
+  buildWorldDecor() {
+    while (this.worldDecor.children.length) {
+      const c = this.worldDecor.children[0];
+      this.worldDecor.remove(c);
+      c.traverse?.((o) => {
+        o.geometry?.dispose?.();
+        if (o.material) {
+          if (Array.isArray(o.material)) o.material.forEach((m) => m.dispose?.());
+          else o.material.dispose?.();
+        }
+      });
+    }
+    this.cloudGroups.length = 0;
+    this.distantCraft.length = 0;
+    this.buildIslands();
+    this.buildMountains();
+    this.buildClouds();
+    this.buildBuoys();
+    this.buildDistantPatrol();
+  }
+
+  renderReflection() {
+    this.reflFrame++;
+    if (this.reflFrame % 2 !== 0) return;
+    const pos = this.camera.position;
+    this.reflCamera.position.set(pos.x, -pos.y, pos.z);
+    const target = new THREE.Vector3();
+    this.camera.getWorldDirection(target);
+    target.y *= -1;
+    target.add(this.reflCamera.position);
+    this.reflCamera.up.set(0, 1, 0);
+    this.reflCamera.lookAt(target);
+    this.reflCamera.fov = this.camera.fov;
+    this.reflCamera.aspect = this.camera.aspect;
+    this.reflCamera.updateProjectionMatrix();
+    this.water.visible = false;
+    const prev = this.renderer.getRenderTarget();
+    this.renderer.setRenderTarget(this.reflectionRT);
+    this.renderer.clear();
+    this.renderer.render(this.scene, this.reflCamera);
+    this.renderer.setRenderTarget(prev);
+    this.water.visible = true;
+    this.waterUniforms.tReflection.value = this.reflectionRT.texture;
+  }
+
+  clearGroupList(list) {
+    for (const o of list) this.scene.remove(o);
+    list.length = 0;
+  }
+
+  buildRouteRibbon() {
+    while (this.routeRibbon.children.length) {
+      const c = this.routeRibbon.children[0];
+      this.routeRibbon.remove(c);
+      c.geometry?.dispose?.();
+      c.material?.dispose?.();
+    }
+    if (this.waypoints.length < 2) return;
+    const pts = this.waypoints.map((w) => w.clone());
+    const curve = new THREE.CatmullRomCurve3(pts);
+    const geo = new THREE.TubeGeometry(curve, Math.max(24, pts.length * 8), 0.6, 6, false);
+    const mat = new THREE.MeshBasicMaterial({
+      color: 0x44ccff, transparent: true, opacity: 0.22,
+      blending: THREE.AdditiveBlending, depthWrite: false,
+    });
+    this.routeRibbon.add(new THREE.Mesh(geo, mat));
+    const glow = new THREE.Mesh(
+      new THREE.TubeGeometry(curve, Math.max(16, pts.length * 6), 1.8, 5, false),
+      new THREE.MeshBasicMaterial({ color: 0x2288ff, transparent: true, opacity: 0.08, blending: THREE.AdditiveBlending, depthWrite: false })
+    );
+    this.routeRibbon.add(glow);
+  }
+
+
+  spawnWaypoints() {
+    this.clearGroupList(this.rings);
+    this.waypoints.length = 0;
+    for (let i = 0; i < TOTAL_RINGS; i++) {
+      const wp = new THREE.Vector3((Math.random() - 0.5) * 480, 45 + Math.random() * 55, -220 - i * 280);
+      this.waypoints.push(wp);
+      const ring = new THREE.Mesh(
+        new THREE.TorusGeometry(14, 0.5, 12, 48),
+        new THREE.MeshBasicMaterial({ color: 0x66e0ff, transparent: true, opacity: 0.7, blending: THREE.AdditiveBlending, depthWrite: false })
+      );
+      ring.position.copy(wp);
+      ring.add(new THREE.Mesh(
+        new THREE.TorusGeometry(14, 1.8, 8, 32),
+        new THREE.MeshBasicMaterial({ color: 0x2288ff, transparent: true, opacity: 0.15, blending: THREE.AdditiveBlending, depthWrite: false })
+      ));
+      this.scene.add(ring); this.rings.push(ring);
+    }
+    this.buildRouteRibbon();
+    this.ringsDone = 0;
+    this.updateRouteHUD();
+  }
+
+  /** 雷達邊緣外編隊生成點 */
+  _radarEdgePos(extra = 40) {
+    const pp = this.player.position;
+    this._fwd.set(0, 0, -1).applyQuaternion(this.player.quaternion);
+    const ang = Math.atan2(this._fwd.x, -this._fwd.z) + (Math.random() - 0.5) * Math.PI * 1.4;
+    const r = RADAR_RANGE + extra + Math.random() * 80;
+    return new THREE.Vector3(
+      pp.x + Math.sin(ang) * r,
+      THREE.MathUtils.clamp(pp.y + (Math.random() - 0.5) * 50, 35, 130),
+      pp.z - Math.cos(ang) * r
+    );
+  }
+
+  spawnEnemy(pos, { elite = false } = {}) {
+    const palette = elite
+      ? { body: 0xc9a227, dark: 0x4a3010, accent: 0x8a6020, glow: 0xffaa22 }
+      : { body: 0xb04848, dark: 0x401818, accent: 0x602828, glow: 0xff4422 };
+    const e = createJet(palette);
+    e.scale.setScalar(elite ? 1.05 : 0.85);
+    e.position.copy(pos);
+    e.userData = {
+      type: 'enemy',
+      hp: elite ? 8 : 3,
+      maxHp: elite ? 8 : 3,
+      elite,
+      ai: new EnemyAI(e, pos.clone()),
+    };
+    this.scene.add(e);
+    this.enemies.push(e);
+    return e;
+  }
+
+  spawnItem(type, pos) {
+    const col = type === 'fuel' ? 0x33ff88 : 0x44ccff;
+    const obj = new THREE.Mesh(
+      new THREE.OctahedronGeometry(2, 0),
+      new THREE.MeshStandardMaterial({ color: col, emissive: col, emissiveIntensity: 0.6, metalness: 0.5, roughness: 0.3 })
+    );
+    obj.position.copy(pos);
+    obj.userData = { type };
+    obj.add(new THREE.Mesh(
+      new THREE.SphereGeometry(3.2, 12, 12),
+      new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: 0.12, blending: THREE.AdditiveBlending, depthWrite: false })
+    ));
+    this.scene.add(obj);
+    this.items.push(obj);
+  }
+
+  showWaveToast(msg) {
+    if (!this.waveToast) return;
+    this.waveToast.textContent = msg;
+    this.waveToast.classList.add('show');
+    clearTimeout(this._waveToastT);
+    this._waveToastT = setTimeout(() => this.waveToast.classList.remove('show'), 1800);
+  }
+
+  spawnWave(reason = 'engage') {
+    this.wave++;
+    const count = Math.min(2 + Math.ceil(this.wave * 0.85), 6);
+    let elites = this.wave >= 2 && Math.random() < 0.35 + this.wave * 0.04 ? 1 : 0;
+    if (this.wave >= 5 && Math.random() < 0.4) elites = 2;
+    const base = this._radarEdgePos(50);
+    for (let i = 0; i < count; i++) {
+      const offset = new THREE.Vector3((i - count * 0.5) * 28, Math.sin(i) * 10, i * 16);
+      const elite = elites > 0 && (i === count - 1 || (i === 0 && elites > 1));
+      if (elite) elites--;
+      this.spawnEnemy(base.clone().add(offset), { elite });
+    }
+    this.waveCooldown = 4;
+    this.pendingWave = false;
+    this.showWaveToast(`WAVE ${this.wave} · ${reason === 'clear' ? 'HOSTILES INBOUND' : 'NEW CONTACTS'}`);
+  }
+
+  destroyEnemy(ei, score) {
+    const e = this.enemies[ei];
+    if (!e) return;
+    const pos = e.position.clone();
+    const elite = !!e.userData.elite;
+    this.spawnExplosion(pos, elite ? 1.8 : 1.3);
+    this.scene.remove(e);
+    this.enemies.splice(ei, 1);
+    this.kills++;
+    this.addScore(score);
+    if (elite && Math.random() < 0.85) {
+      this.spawnItem(Math.random() < 0.55 ? 'fuel' : 'weapon', pos.clone().add(new THREE.Vector3(0, 2, 0)));
+    }
+    if (this.enemies.length === 0) {
+      this.pendingWave = true;
+      this.waveCooldown = Math.max(this.waveCooldown, 2.2);
+    }
+  }
+
+  spawnExplosion(pos, scale = 1) {
+    AudioFX.boom(scale);
+    this.cameraRig.addShake(0.35 * scale);
+    this.explosionPool.spawnBoom(pos, scale);
+  }
+
+  addContrail(pos, isMissile = false) {
+    if (pos.distanceTo(this.camera.position) < 12) return;
+    this.explosionPool.spawnTrail(pos, isMissile);
+  }
+
+  flashDamage() {
+    const el = document.getElementById('damage-flash');
+    el.style.opacity = '1';
+    setTimeout(() => { el.style.opacity = '0'; }, 120);
+    AudioFX.hit();
+    this.cameraRig.addShake(0.32);
+  }
+
+  popScore(delta) {
+    const el = document.getElementById('score');
+    const fl = document.getElementById('score-float');
+    el.classList.remove('pop');
+    void el.offsetWidth;
+    el.classList.add('pop');
+    setTimeout(() => el.classList.remove('pop'), 180);
+    fl.textContent = `+${delta}`;
+    fl.classList.remove('show');
+    void fl.offsetWidth;
+    fl.classList.add('show');
+  }
+
+  updateRouteHUD() {
+    const dots = document.getElementById('route-dots');
+    dots.innerHTML = '';
+    for (let i = 0; i < TOTAL_RINGS; i++) {
+      const s = document.createElement('span');
+      if (i < this.ringsDone) s.className = 'done';
+      else if (i === this.ringsDone && this.waypoints.length) s.className = 'current';
+      dots.appendChild(s);
+    }
+    document.getElementById('route-count').textContent = `${this.ringsDone}/${TOTAL_RINGS}`;
+    document.getElementById('route-hint').textContent = this.waypoints.length
+      ? `RING ${this.ringsDone + 1} / ${TOTAL_RINGS}`
+      : 'COMPLETE';
+  }
+
+  addScore(n) {
+    this.score += n;
+    this.popScore(n);
+  }
+
+  shootGun() {
+    if (this.weapons.gunOverheated) return;
+    AudioFX.gun();
+    this.cameraRig.addShake(0.06);
+    const origin = this.player.getGunOrigin();
+    const dir = this.player.getGunDirection();
+    const spd = (2.8 + this.player.airspeedNorm * 2.2) * this.weaponPower;
+    this.bulletPool.spawn(origin, this.player.quaternion, dir.multiplyScalar(spd), {
+      team: 'player', life: 2, damage: this.weaponPower, color: 0xffff66,
+    });
+    this.explosionPool.spawnMuzzle(origin);
+  }
+
+  fireMissile() {
+    if (!this.weapons.canFireMissile()) return;
+    this.weapons.consumeMissile();
+    AudioFX.missile();
+    this.cameraRig.addShake(0.12);
+    const wpn = this.weapons;
+    const origin = new THREE.Vector3(1.2, -0.3, -0.5).applyMatrix4(this.player.root.matrixWorld);
+    const target = this.lockOn.getFireTarget();
+    const guided = !!target;
+    const dir = this.player.getGunDirection();
+    const launchSpd = wpn.mslInitialSpeed + this.player.airspeed * 0.85;
+    this.missilePool.spawn(origin, this.player.quaternion, dir.multiplyScalar(launchSpd), {
+      target: guided ? target : null,
+      guided,
+      life: guided ? wpn.mslLife : wpn.mslBlindLife,
+      accel: wpn.mslAccel,
+      maxSpeed: wpn.mslMaxSpeed,
+      maxTurn: wpn.mslMaxTurnRate,
+      owner: 'player',
+    });
+  }
+
+  updateCompass() {
+    if (!this.waypoints.length) {
+      this.compassArrow.style.transform = 'translate(-50%,-70%) rotate(0deg)';
+      return;
+    }
+    const wp = this.waypoints[0];
+    const dx = wp.x - this.player.position.x;
+    const dz = wp.z - this.player.position.z;
+    const bearing = Math.atan2(dx, -dz);
+    const rel = bearing - this._euler.y;
+    this.compassArrow.style.transform = `translate(-50%,-70%) rotate(${THREE.MathUtils.radToDeg(rel)}deg)`;
+  }
+
+  formatTime(s) {
+    return `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
+  }
+
+  toggleMute() {
+    const m = AudioFX.toggleMute();
+    document.getElementById('mute-btn').textContent = m ? '🔇' : '🔊';
+  }
+
+  setState(next) {
+    if (this.state === next) return;
+    this.state = next;
+    this.pausePanel?.classList.toggle('show', next === GameState.PAUSED);
+    this.endPanel?.classList.toggle('show', next === GameState.GAMEOVER);
+    AudioFX.setPaused(next === GameState.PAUSED || next === GameState.GAMEOVER || next === GameState.MENU);
+    document.body.style.cursor = next === GameState.PLAYING ? 'none' : 'default';
+  }
+
+  togglePause() {
+    if (this.state === GameState.PLAYING) this.setState(GameState.PAUSED);
+    else if (this.state === GameState.PAUSED) this.setState(GameState.PLAYING);
+  }
+
+  endGame(text) {
+    document.getElementById('msg').style.display = 'none';
+    document.getElementById('end-title').textContent = text;
+    document.getElementById('end-score').textContent = this.score;
+    document.getElementById('end-kills').textContent = String(this.kills);
+    document.getElementById('end-time').textContent = this.formatTime(this.elapsed);
+    document.getElementById('end-wave').textContent = String(this.wave);
+    this.setState(GameState.GAMEOVER);
+  }
+
+  resetWorld() {
+    this.bulletPool.releaseAll();
+    this.missilePool.releaseAll();
+    this.explosionPool.releaseAll();
+    this.clearGroupList(this.enemies);
+    this.clearGroupList(this.items);
+    this.clearGroupList(this.rings);
+    this.waypoints.length = 0;
+
+    this.fuel = 100;
+    this.score = 0;
+    this.weaponPower = 1;
+    this.missionTime = this.missionTimeMax;
+    this.boostCd = 0;
+    this.lastHp = 100;
+    this.ringsDone = 0;
+    this.trailAcc = 0;
+    this.foamAcc = 0;
+    this.ambientBoomT = 8;
+    this.wave = 0;
+    this.kills = 0;
+    this.elapsed = 0;
+    this.waveCooldown = 0;
+    this.pendingWave = false;
+
+    this.player.reset();
+    this.mouseAim.reset();
+    this.weapons.reset();
+    this.lockOn.reset();
+    this.worldHud.clear();
+    this.cameraRig.reset(this.player.position);
+
+    document.getElementById('weapon-label').textContent = 'CANNON · SPACE / MISSILE · F';
+    document.getElementById('boost-cd').textContent = 'READY';
+    document.getElementById('score').textContent = '0';
+    document.getElementById('hp-fill').style.width = '100%';
+    document.getElementById('fuel-fill').style.width = '100%';
+    this.barsEl.classList.remove('fuel-low');
+    this.spdChip.classList.remove('hot');
+    this.fxOverlay.classList.remove('fast', 'boost');
+    this.speedLines.classList.remove('radial');
+    this.speedLines.style.opacity = '0';
+
+    this.spawnWaypoints();
+    this.spawnWave('start');
+  }
+
+  restartGame() {
+    document.getElementById('msg').style.display = 'none';
+    this.resetWorld();
+    this.setState(GameState.PLAYING);
+    AudioFX.unlock();
+  }
+
+  startGame() {
+    if (this.state !== GameState.MENU) return;
+    AudioFX.unlock();
+    const loading = document.getElementById('loading');
+    if (loading) {
+      loading.style.opacity = '0';
+      setTimeout(() => loading.remove(), 500);
+    }
+    this.mouseAim.reset();
+    this.resetWorld();
+    this.setState(GameState.PLAYING);
+  }
+
+  _bindInput() {
+    window.addEventListener('keydown', (e) => {
+      this.keys[e.code] = true;
+      if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.code)) e.preventDefault();
+      if (e.code === 'Escape') {
+        e.preventDefault();
+        this.togglePause();
+        return;
+      }
+      if (this.state !== GameState.PLAYING) return;
+      if (e.code === 'KeyF') this.fireMissile();
+      if (e.code === 'KeyR' && this.boostCd <= 0) {
+        this.player.triggerBoost();
+        this.boostCd = 8;
+        AudioFX.boost();
+      }
+      if (e.code === 'KeyM') this.toggleMute();
+    });
+    window.addEventListener('keyup', (e) => { this.keys[e.code] = false; });
+
+    window.addEventListener('mousemove', (e) => {
+      if (this.state !== GameState.PLAYING) return;
+      this.mouseAim.setFromClient(e.clientX, e.clientY);
+    });
+
+    document.getElementById('mute-btn').addEventListener('click', () => this.toggleMute());
+    document.getElementById('btn-restart').addEventListener('click', (e) => {
+      e.stopPropagation();
+      this.restartGame();
+    });
+    document.getElementById('btn-resume')?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (this.state === GameState.PAUSED) this.setState(GameState.PLAYING);
+    });
+    document.getElementById('btn-pause-restart')?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      this.restartGame();
+    });
+
+    window.addEventListener('resize', () => {
+      this.camera.aspect = innerWidth / innerHeight;
+      this.camera.updateProjectionMatrix();
+      this.reflCamera.aspect = this.camera.aspect;
+      this.reflCamera.updateProjectionMatrix();
+      this.renderer.setSize(innerWidth, innerHeight);
+      this.composer.setSize(innerWidth, innerHeight);
+      this.bloom.setSize(innerWidth, innerHeight);
+    });
+
+    const loading = document.getElementById('loading');
+    loading?.addEventListener('click', () => this.startGame());
+    loading?.addEventListener('keydown', () => this.startGame());
+  }
+
+  animate = (now) => {
+    requestAnimationFrame(this.animate);
+    const dt = Math.min((now - this.lastTime) / 1000, 0.05);
+    this.lastTime = now;
+    const t = now * 0.001;
+
+    this.waterUniforms.time.value = t;
+    this.waterUniforms.camPos.value.copy(this.camera.position);
+    this.gradePass.uniforms.time.value = t;
+    this.gradePass.uniforms.speed.value = this.state === GameState.PLAYING ? this.player.airspeedNorm : 0.2;
+
+    // 裝飾物慢速更新（MENU／PAUSE 也可動）
+    for (const cg of this.cloudGroups) {
+      cg.position.x += (cg.userData.drift || 3) * dt * 0.35;
+      if (cg.position.x > 2200) cg.position.x = -2200;
+    }
+    for (const form of this.distantCraft) {
+      form.position.z -= form.userData.speed * dt;
+      form.position.y += Math.sin(t * 0.4 + form.userData.phase) * 0.15;
+      if (form.position.z < -3200) form.position.z = 200;
+    }
+    this.worldDecor.children.forEach((c) => {
+      if (c.userData.isBuoy) c.position.y = Math.sin(t * 1.5 + c.position.x * 0.01) * 0.6;
+    });
+
+    if (this.state === GameState.MENU) {
+      this.camera.position.set(40, 35, 80);
+      this.camera.lookAt(this.player.position);
+      this.renderReflection();
+      this.composer.render();
+      return;
+    }
+
+    if (this.state === GameState.PAUSED || this.state === GameState.GAMEOVER) {
+      this.renderReflection();
+      this.composer.render();
+      return;
+    }
+
+    // —— PLAYING ——
+    this.elapsed += dt;
+    this.mouseAim.update(dt);
+
+    this.missionTime -= dt;
+    document.getElementById('timer').textContent = this.formatTime(Math.max(0, this.missionTime));
+    if (this.missionTime <= 0) { this.endGame('TIME UP'); return; }
+
+    if (this.boostCd > 0) {
+      this.boostCd -= dt;
+      document.getElementById('boost-cd').textContent = this.boostCd > 0 ? this.boostCd.toFixed(1) : 'READY';
+    }
+    this.weapons.update(dt);
+
+    const gunHeld = !!(this.keys.Space);
+    if (this.weapons.updateGun(dt, gunHeld)) this.shootGun();
+
+    this.player.updateControls(dt, this.mouseAim, this.keys);
+    this.player.updateAttitude(dt);
+    const phys = this.player.updatePhysics(dt);
+
+    if (phys.waterCrash) {
+      this.spawnExplosion(this.player.position.clone(), 2.8);
+      this.player.mesh.visible = false;
+      this.endGame('WATER IMPACT');
+      return;
+    }
+    if (phys.lowAlt) {
+      this.foamAcc += dt;
+      if (this.foamAcc > 0.05) {
+        this.foamAcc = 0;
+        const splashPos = this.player.position.clone();
+        splashPos.y = 0.5;
+        this.explosionPool.spawnSplash(splashPos, phys.foam);
+      }
+    } else {
+      this.foamAcc = 0;
+    }
+
+    AudioFX.setEngine(this.player.throttle, this.player.airspeedNorm);
+    this.player.updateExhaust(this.exhaustLight);
+
+    const thr = this.player.throttle;
+    this.trailAcc += dt;
+    const trailInterval = thr > 0.8 || this.player.boosting ? 0.09 : 0.14;
+    if (this.trailAcc > trailInterval && thr > 0.48) {
+      this.trailAcc = 0;
+      this.addContrail(new THREE.Vector3(0.48, -0.18, 4.8).applyMatrix4(this.player.mesh.matrixWorld));
+      this.addContrail(new THREE.Vector3(-0.48, -0.18, 4.8).applyMatrix4(this.player.mesh.matrixWorld));
+    }
+
+    const spdRatio = this.player.airspeedNorm;
+    const fastFx = spdRatio > 0.72 || this.player.boosting;
+    const boostFx = this.player.boosting || spdRatio > 0.92;
+    this.speedLines.style.opacity = String(Math.max(0, (spdRatio - 0.32) * 2.1 + (this.player.boosting ? 0.25 : 0)));
+    this.speedLines.classList.toggle('radial', boostFx || spdRatio > 0.8);
+    this.fxOverlay.classList.toggle('fast', fastFx && !boostFx);
+    this.fxOverlay.classList.toggle('boost', boostFx);
+    this.spdChip.classList.toggle('hot', spdRatio > 0.7 || thr > 0.85 || this.player.boosting);
+
+    this.cameraRig.update(
+      dt, this.player.root, spdRatio, thr, this.player.boosting,
+      this.player.getRollAmount(), this.player.telemetry.gApprox
+    );
+
+    // 鎖定（敵機 AI 需要）
+    this.lockSnap = this.lockOn.update(dt, this.enemies, this.player.position);
+
+    // —— 子彈池 ——
+    for (let i = this.bulletPool.active.length - 1; i >= 0; i--) {
+      const b = this.bulletPool.active[i];
+      const ud = b.userData;
+      b.position.addScaledVector(ud.velocity, dt * 60);
+      ud.life -= dt;
+      let dead = ud.life <= 0;
+
+      if (!dead && ud.team === 'player') {
+        for (let ei = this.enemies.length - 1; ei >= 0; ei--) {
+          if (b.position.distanceTo(this.enemies[ei].position) < 5.5) {
+            this.enemies[ei].userData.hp -= ud.damage;
+            this.spawnExplosion(b.position.clone(), 0.35);
+            dead = true;
+            if (this.enemies[ei].userData.hp <= 0) {
+              this.destroyEnemy(ei, this.enemies[ei].userData.elite ? 200 : 100);
+            }
+            break;
+          }
+        }
+      } else if (!dead && ud.team === 'enemy') {
+        if (b.position.distanceTo(this.player.position) < 5.2) {
+          this.player.takeDamage(ud.damage);
+          this.spawnExplosion(b.position.clone(), 0.25);
+          dead = true;
+        }
+      }
+      if (dead) this.bulletPool.release(b);
+    }
+
+    // —— 導彈池 ——
+    for (let i = this.missilePool.active.length - 1; i >= 0; i--) {
+      const m = this.missilePool.active[i];
+      const ud = m.userData;
+      ud.life -= dt;
+      ud.smokeT -= dt;
+      if (ud.confused > 0) ud.confused -= dt;
+      if (ud.smokeT <= 0) { this.addContrail(m.position.clone(), true); ud.smokeT = 0.08; }
+
+      let spd = ud.velocity.length();
+      if (spd > 0.001) {
+        ud.velocity.multiplyScalar(Math.min(ud.maxSpeed, spd + ud.accel * dt) / spd);
+        spd = ud.velocity.length();
+      }
+
+      // Flare 干擾：靠近熱焰彈機率失鎖
+      if (ud.guided && ud.confused <= 0) {
+        for (const p of this.explosionPool.active) {
+          if (p.userData.type !== 'flare' || !p.userData.alive) continue;
+          if (m.position.distanceTo(p.position) < 42 && Math.random() < 0.12) {
+            ud.guided = false;
+            ud.target = null;
+            ud.confused = 0.8;
+            break;
+          }
+        }
+      }
+
+      const turnRate = ud.confused > 0 ? ud.maxTurn * 0.35 : ud.maxTurn;
+      if (ud.guided && ud.target?.parent) {
+        this._mslSteer.copy(ud.target.position).sub(m.position);
+        const toLen = this._mslSteer.length();
+        if (toLen > 0.01) {
+          this._mslSteer.multiplyScalar(1 / toLen);
+          const velDir = this._tmp.copy(ud.velocity).normalize();
+          const dot = THREE.MathUtils.clamp(velDir.dot(this._mslSteer), -1, 1);
+          const ang = Math.acos(dot);
+          const maxStep = turnRate * dt;
+          if (ang > 1e-4) {
+            const tt = Math.min(1, maxStep / ang);
+            velDir.lerp(this._mslSteer, tt).normalize();
+            ud.velocity.copy(velDir).multiplyScalar(spd);
+          }
+        }
+        m.lookAt(this._tmp2.copy(m.position).add(ud.velocity));
+      } else if (ud.guided && !ud.target?.parent) {
+        ud.guided = false;
+      }
+
+      m.position.addScaledVector(ud.velocity, dt);
+      let hit = false;
+      const hitR = this.weapons.mslHitRadius;
+      for (let ei = this.enemies.length - 1; ei >= 0; ei--) {
+        if (m.position.distanceTo(this.enemies[ei].position) < hitR) {
+          this.destroyEnemy(ei, this.enemies[ei].userData.elite ? 280 : 150);
+          hit = true;
+          break;
+        }
+      }
+      if (hit || ud.life <= 0) {
+        if (!hit) this.spawnExplosion(m.position.clone(), 0.4);
+        this.missilePool.release(m);
+      }
+    }
+
+    this.explosionPool.update(dt, this.camera.position, this.player.position);
+
+    // —— 敵機 AI ——
+    const aiCtx = {
+      dt,
+      player: this.player,
+      lockSnap: this.lockSnap,
+      missiles: this.missilePool.active,
+      bulletPool: this.bulletPool,
+      explosionPool: this.explosionPool,
+    };
+    for (const e of this.enemies) {
+      e.userData.ai?.update(aiCtx);
+      const d = this.player.position.distanceTo(e.position);
+      if (d < 11) this.player.takeDamage(22 * dt);
+    }
+
+    if (this.player.hp < this.lastHp - 1) this.flashDamage();
+    this.lastHp = this.player.hp;
+
+    // 波次
+    if (this.waveCooldown > 0) this.waveCooldown -= dt;
+    if (this.pendingWave && this.waveCooldown <= 0) this.spawnWave('clear');
+
+    for (let i = this.items.length - 1; i >= 0; i--) {
+      const item = this.items[i];
+      item.rotation.y += dt * 1.8;
+      item.position.y += Math.sin(t * 2 + i) * 0.02;
+      if (this.player.position.distanceTo(item.position) < 11) {
+        if (item.userData.type === 'fuel') this.fuel = Math.min(100, this.fuel + 35);
+        if (item.userData.type === 'weapon') {
+          this.weaponPower = 3;
+          this.weapons.addMissiles(3);
+          document.getElementById('weapon-label').textContent = 'HEAVY CANNON · SPACE / MISSILE · F';
+        }
+        AudioFX.pickup();
+        this.spawnExplosion(item.position.clone(), 0.3);
+        this.scene.remove(item); this.items.splice(i, 1); this.addScore(25);
+      }
+    }
+
+    this.rings.forEach((r, i) => {
+      r.rotation.x += dt * 0.4; r.rotation.y += dt * 0.8;
+      r.material.opacity = i === 0 ? 0.9 : 0.3;
+      r.material.color.setHex(i === 0 ? 0x88ffcc : 0x66ccee);
+    });
+    if (this.waypoints.length) {
+      const dist = this.player.position.distanceTo(this.waypoints[0]);
+      document.getElementById('dist').textContent = Math.floor(dist);
+      if (dist < 24) {
+        this.waypoints.shift();
+        const ring = this.rings.shift();
+        if (ring) { this.spawnExplosion(ring.position.clone(), 0.8); this.scene.remove(ring); }
+        this.ringsDone++;
+        this.updateRouteHUD();
+        this.buildRouteRibbon();
+        AudioFX.waypoint(); this.addScore(200);
+        // 每通過航點觸發編隊（若場上敵機不多）
+        if (this.enemies.length < 3 && this.waveCooldown <= 0) this.spawnWave('waypoint');
+        else if (this.ringsDone % 2 === 0) {
+          this.pendingWave = true;
+          this.waveCooldown = Math.max(this.waveCooldown, 1.5);
+        }
+        if (!this.waypoints.length) this.endGame('MISSION COMPLETE');
+      }
+    } else {
+      document.getElementById('dist').textContent = '—';
+    }
+
+    this.ambientBoomT -= dt;
+    if (this.ambientBoomT <= 0) {
+      this.ambientBoomT = 8 + Math.random() * 12;
+      const afar = this.player.position.clone().add(new THREE.Vector3(
+        (Math.random() - 0.5) * 600, 40 + Math.random() * 80, -200 - Math.random() * 400
+      ));
+      this.spawnExplosion(afar, 0.55 + Math.random() * 0.4);
+    }
+
+    this.fuel -= (0.01 + this.player.throttle * 0.028) * dt * 60;
+    document.getElementById('hp-fill').style.width = `${Math.max(0, this.player.hp)}%`;
+    document.getElementById('fuel-fill').style.width = `${Math.max(0, this.fuel)}%`;
+    this.barsEl.classList.toggle('fuel-low', this.fuel < 28);
+    document.getElementById('score').textContent = this.score;
+    document.getElementById('spd-ui').textContent = Math.floor(this.player.airspeed * 3.6);
+    document.getElementById('alt-ui').textContent = Math.floor(this.player.position.y * 14);
+
+    if (this.fuel <= 0 || this.player.hp <= 0) {
+      this.spawnExplosion(this.player.position.clone(), 2.2);
+      this.player.mesh.visible = false;
+      this.endGame(this.fuel <= 0 ? 'FUEL EMPTY' : 'SHOT DOWN');
+      return;
+    }
+
+    this._euler.setFromQuaternion(this.player.quaternion, 'YXZ');
+    this.radarHud.update(dt, this.player.root, this.enemies, this.waypoints, this.items);
+    this.updateCompass();
+    this.worldHud.update(this.enemies, this.waypoints, this.player.position, this.lockSnap);
+
+    this.renderReflection();
+    this.composer.render();
+  };
+
+  run() {
+    requestAnimationFrame(this.animate);
+  }
+}
+
+
+const game = new GameCore();
+game.run();
+
+</script>
+</body>
+</html>
