@@ -179,6 +179,8 @@ export class GameCore {
             this._perfAcc.hudBars = 0;
             this._perfAcc.spatial = 0;
             this._perfAcc.frame = 0;
+            this._perfAcc.cloudDens = 0;
+            this._perfAcc.fog = 0;
         }
         this._activeBoomBudget = 0;
         this.stunts?.reset();
@@ -192,8 +194,16 @@ export class GameCore {
         this._euler = new THREE.Euler(0, 0, 0, 'YXZ');
         this._tmp = new THREE.Vector3();
         this._tmp2 = new THREE.Vector3();
+        this._tmp3 = new THREE.Vector3();
         this._mslSteer = new THREE.Vector3();
         this._lockTargets = [];
+        this._cloudDensCache = 0;
+        this._basePixelRatio = Math.min(
+            typeof devicePixelRatio !== 'undefined' ? devicePixelRatio : 1,
+            this.config.performance?.max_pixel_ratio ?? 1.5
+        );
+        this._menuWaterReflectionInterval = this.config.environment?.water_reflection_interval ?? 3;
+        this._defaultLosSamples = this.config.terrain?.los_samples ?? 24;
 
         this.hud.renderLeaderboard(leaderboard);
         this.hud.renderRoute(0, this.route.total, true);
@@ -233,14 +243,18 @@ export class GameCore {
             hudBars: 0,
             spatial: 0,
             frame: 0,
+            cloudDens: 0,
+            fog: 0,
         };
         this._activeBoomBudget = 0;
+        this._lastWx = null;
     }
 
     // ── 狀態 ─────────────────────────────
 
     setState(next) {
         if (this.state === next) return;
+        const prev = this.state;
         this.state = next;
         this.hud.applyState(next);
         const paused = next === GameState.PAUSED
@@ -249,6 +263,63 @@ export class GameCore {
             || next === GameState.HANGAR
             || next === GameState.LEVEL_UP;
         this.audio.setPaused(paused);
+
+        // 暫停／升級選單仍屬「任務中」，避免反覆切換 DPR／反射造成頓挫
+        const wasMission = prev === GameState.PLAYING
+            || prev === GameState.PAUSED
+            || prev === GameState.LEVEL_UP;
+        const nowMission = next === GameState.PLAYING
+            || next === GameState.PAUSED
+            || next === GameState.LEVEL_UP;
+        if (wasMission !== nowMission) this._applyFlightPerfMode(nowMission);
+    }
+
+    /**
+     * 飛行／任務中套用激進降載；回選單／結束後還原展示設定。
+     * @param {boolean} flying
+     */
+    _applyFlightPerfMode(flying) {
+        const perf = this.config.performance ?? {};
+        const env = this.config.environment ?? {};
+
+        if (flying) {
+            const flightPr = perf.flight_max_pixel_ratio ?? 1.25;
+            this.renderer.setPixelRatio(Math.min(
+                typeof devicePixelRatio !== 'undefined' ? devicePixelRatio : 1,
+                flightPr
+            ));
+            const refl = perf.flight_water_reflection_interval;
+            this.water.setReflectionInterval(
+                refl === undefined ? 0 : Math.max(0, refl | 0)
+            );
+            this.sceneBuilder.cloudUpdateStride = Math.max(1, perf.flight_cloud_update_stride ?? 3);
+            this.sceneBuilder.fogAltitudeEpsilon = 8;
+            this.audio.setEngineAudioCadence(
+                perf.flight_engine_audio_hz ?? 12,
+                perf.flight_engine_audio_epsilon ?? 0.012
+            );
+            this.loop.setMaxDelta(perf.flight_max_delta ?? 0.04);
+            if (this.terrain) {
+                this.terrain.losSamples = Math.max(4, perf.flight_los_samples ?? 10);
+            }
+            this._cloudDensCache = this.sceneBuilder.sampleCloudDensity(this.camera.position);
+            if (this._perfAcc) {
+                this._perfAcc.cloudDens = 0;
+                this._perfAcc.fog = 0;
+            }
+        } else {
+            this.renderer.setPixelRatio(this._basePixelRatio);
+            this.water.setReflectionInterval(
+                this._menuWaterReflectionInterval ?? env.water_reflection_interval ?? 3
+            );
+            this.sceneBuilder.cloudUpdateStride = 1;
+            this.sceneBuilder.fogAltitudeEpsilon = 2;
+            this.audio.setEngineAudioCadence(0);
+            this.loop.setMaxDelta(0.05);
+            if (this.terrain) {
+                this.terrain.losSamples = this._defaultLosSamples;
+            }
+        }
     }
 
     togglePause() {
@@ -387,6 +458,8 @@ export class GameCore {
             this._perfAcc.hudBars = 0;
             this._perfAcc.spatial = 0;
             this._perfAcc.frame = 0;
+            this._perfAcc.cloudDens = 0;
+            this._perfAcc.fog = 0;
         }
         this.weather?.reset();
         this.stunts?.reset();
@@ -751,7 +824,8 @@ export class GameCore {
             let dead = ud.life <= 0;
 
             if (!dead && ud.team === 'player') {
-                for (const enemy of [...this.waves.enemies]) {
+                for (const enemy of this.waves.enemies) {
+                    if (!enemy.alive) continue;
                     if (b.position.distanceTo(enemy.position) >= Math.max(enemyHitR, enemy.hitRadius)) continue;
                     enemy.takeDamage(ud.damage);
                     this.spawnExplosion(b.position.clone(), 0.35);
@@ -796,8 +870,8 @@ export class GameCore {
             ud.smokeT -= dt;
             if (ud.confused > 0) ud.confused -= dt;
             if (ud.smokeT <= 0) {
-                this.addContrail(m.position.clone(), true);
-                ud.smokeT = 0.08;
+                this.addContrail(m.position, true);
+                ud.smokeT = this._missileSmokeInterval ?? 0.08;
             }
 
             let spd = ud.velocity.length();
@@ -865,7 +939,8 @@ export class GameCore {
             // 玩家飛彈打敵機／Boss 部位
             if (!hit && (ud.owner === 'player' || !ud.owner)) {
                 const mslDmg = ud.damage ?? this.config.weapons.missile.damage ?? 1;
-                for (const enemy of [...this.waves.enemies]) {
+                for (const enemy of this.waves.enemies) {
+                    if (!enemy.alive) continue;
                     if (m.position.distanceTo(enemy.position) >= blastR + enemy.hitRadius * 0.35) continue;
                     enemy.takeDamage(mslDmg);
                     this.spawnExplosion(m.position.clone(), 1.15);
@@ -939,7 +1014,7 @@ export class GameCore {
         const diveSpeed = gpws.dive_speed ?? 18;
         const interval = gpws.alert_interval ?? 0.55;
 
-        this.radarAlt = this.terrain.radarAltitude(this.player.position);
+        // 複用本幀已採樣的 radarAlt，避免重複 heightmap 雙線性
         const diving = this.player.velocity.y < -diveSpeed
             || this.player.getForward().y < -0.35;
 
@@ -1092,24 +1167,43 @@ export class GameCore {
         const perf = this.config.performance ?? {};
         this._perfAcc.frame += 1;
         this._activeBoomBudget = 0;
+        const flying = this.state === GameState.PLAYING;
 
         this.water.update(time, this.camera.position, this.sceneBuilder.sunDirection);
-        this.sceneBuilder.update(dt, time, this.camera);
 
-        const dive = this.state === GameState.PLAYING
+        // 飛行中高度霧降頻；雲 billboard 由 cloudUpdateStride 控制
+        let updateFog = true;
+        if (flying) {
+            this._perfAcc.fog += dt;
+            const fogPeriod = 1 / Math.max(1, perf.flight_fog_hz ?? 6);
+            if (this._perfAcc.fog < fogPeriod) updateFog = false;
+            else this._perfAcc.fog = 0;
+        }
+        this.sceneBuilder.update(dt, time, this.camera, { updateFog });
+
+        const dive = flying
             ? Math.max(0, -this.player.getForward().y - 0.55) * 1.4
             : 0;
-        const cloudWet = this.state === GameState.PLAYING
-            ? this.sceneBuilder.sampleCloudDensity(this.camera.position)
-            : 0;
-        this._cloudDensCache = cloudWet;
+
+        // 穿雲密度降頻：飛行中不必每幀掃全部雲團
+        if (flying) {
+            this._perfAcc.cloudDens += dt;
+            const densPeriod = 1 / Math.max(1, perf.flight_cloud_density_hz ?? 8);
+            if (this._perfAcc.cloudDens >= densPeriod) {
+                this._perfAcc.cloudDens = 0;
+                this._cloudDensCache = this.sceneBuilder.sampleCloudDensity(this.camera.position);
+            }
+        } else {
+            this._cloudDensCache = 0;
+        }
+        const cloudWet = flying ? (this._cloudDensCache ?? 0) : 0;
         this.postFx.update(
             time,
-            this.state === GameState.PLAYING ? this.player.airspeedNorm : 0.2,
+            flying ? this.player.airspeedNorm : 0.2,
             {
                 dive,
-                damage: this.state === GameState.PLAYING && this.player.hp < this.lastHp ? 0.55 : 0,
-                boosting: this.state === GameState.PLAYING && this.player.boosting,
+                damage: flying && this.player.hp < this.lastHp ? 0.55 : 0,
+                boosting: flying && this.player.boosting,
                 cloudWet,
             }
         );
@@ -1170,7 +1264,7 @@ export class GameCore {
             this.foamAcc += dt;
             if (this.foamAcc > 0.05) {
                 this.foamAcc = 0;
-                const splash = this.player.position.clone();
+                const splash = this._tmp3.copy(this.player.position);
                 splash.y = 0.5;
                 this.explosionPool.spawnSplash(splash, phys.foam);
             }
@@ -1220,23 +1314,28 @@ export class GameCore {
             turnRate: Math.abs(this.player.rollRate) + Math.abs(this.player.yawRate) * 1.4,
             boosting: this.player.boosting,
             windBoost: stunt.windBoost ?? 0,
+            dt,
         });
         this.player.updateExhaust(this.sceneBuilder.exhaustLight, time);
         this.contrails.update(dt, this.player, this.camera.position);
 
         const thr = this.player.throttle;
         this.trailAcc += dt;
-        const trailInterval = thr > 0.8 || this.player.boosting ? 0.12 : 0.18;
+        const trailInterval = thr > 0.8 || this.player.boosting ? 0.14 : 0.22;
         if (this.trailAcc > trailInterval && thr > 0.48) {
             this.trailAcc = 0;
-            this.addContrail(new THREE.Vector3(0.48, -0.18, 4.8).applyMatrix4(this.player.mesh.matrixWorld));
-            this.addContrail(new THREE.Vector3(-0.48, -0.18, 4.8).applyMatrix4(this.player.mesh.matrixWorld));
+            this.addContrail(
+                this._tmp.set(0.48, -0.18, 4.8).applyMatrix4(this.player.mesh.matrixWorld)
+            );
+            this.addContrail(
+                this._tmp2.set(-0.48, -0.18, 4.8).applyMatrix4(this.player.mesh.matrixWorld)
+            );
         }
 
         const spdRatio = this.player.airspeedNorm;
         this.hud.setSpeedFx(spdRatio, this.player.boosting);
 
-        // 穿雲：複用本幀已採樣密度
+        // 穿雲：複用已採樣密度
         const cloudDens = this._cloudDensCache ?? 0;
         this.hud.setCloudFx(cloudDens);
         if (cloudDens > 0.25) {
@@ -1260,6 +1359,7 @@ export class GameCore {
         this.lockSnap = this.lockOn.update(dt, this._collectLockTargets(), this.player.position);
         this.hud.setLock(this.lockSnap);
 
+        this._missileSmokeInterval = perf.flight_missile_smoke_interval ?? 0.14;
         this._updateGroundDefense(dt);
         this._updateBullets(dt);
         this._updateMissiles(dt);
@@ -1296,7 +1396,12 @@ export class GameCore {
         }
 
         const aiFarDist = perf.ai_far_distance ?? 420;
-        const aiSkip = Math.max(0, perf.ai_far_skip_frames ?? 1);
+        const aiSkip = Math.max(
+            0,
+            flying
+                ? (perf.flight_ai_far_skip_frames ?? perf.ai_far_skip_frames ?? 2)
+                : (perf.ai_far_skip_frames ?? 1)
+        );
         const aiCtx = {
             dt,
             player: this.player,
@@ -1346,16 +1451,18 @@ export class GameCore {
         this.route.update(dt);
         this._updateRoute();
 
-        if (perf.ambient_boom_enabled !== false) {
+        if (perf.ambient_boom_enabled === true) {
             this.ambientBoomT -= dt;
             if (this.ambientBoomT <= 0) {
                 this.ambientBoomT = 10 + Math.random() * 14;
                 this.spawnExplosion(
-                    this.player.position.clone().add(new THREE.Vector3(
-                        (Math.random() - 0.5) * 600,
-                        40 + Math.random() * 80,
-                        -200 - Math.random() * 400
-                    )),
+                    this._tmp.copy(this.player.position).add(
+                        this._tmp2.set(
+                            (Math.random() - 0.5) * 600,
+                            40 + Math.random() * 80,
+                            -200 - Math.random() * 400
+                        )
+                    ),
                     0.55 + Math.random() * 0.4
                 );
             }

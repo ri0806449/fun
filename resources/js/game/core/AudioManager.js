@@ -284,6 +284,13 @@ export class AudioManager {
         /** @type {GainNode|null} */
         this._makeupGain = null;
         this._chainReady = false;
+
+        /** 引擎／風切／加力：降頻＋epsilon，避免每幀 setVolume／setPlaybackRate thrashing */
+        this._engineAudioAcc = 0;
+        this._engineAudioPeriod = 0; // 0 = 每幀（選單）
+        this._engineAudioEps = 0.012;
+        this._lastEng = { pitch: -1, vol: -1, windPitch: -1, windVol: -1, abPitch: -1, abVol: -1 };
+        this._pendingEngine = null;
     }
 
     /**
@@ -773,13 +780,38 @@ export class AudioManager {
     }
 
     /**
+     * 飛行中降頻引擎音參數寫入（Hz；0 或未設 = 每幀）。
+     * @param {number} hz
+     * @param {number} [epsilon]
+     */
+    setEngineAudioCadence(hz, epsilon = 0.012) {
+        this._engineAudioPeriod = hz > 0 ? 1 / hz : 0;
+        this._engineAudioEps = Math.max(0, epsilon);
+        this._engineAudioAcc = 0;
+    }
+
+    /**
      * 引擎／風切／加力（非線性曲線）。
      * @param {number} throttle
      * @param {number} airspeedNorm
-     * @param {{ gLoad?: number, turnRate?: number, boosting?: boolean }} [extra]
+     * @param {{ gLoad?: number, turnRate?: number, boosting?: boolean, windBoost?: number, dt?: number }} [extra]
      */
     setEngine(throttle, airspeedNorm, extra = {}) {
         if (!this.started || !this.listener || this.muted) return;
+        this._pendingEngine = { throttle, airspeedNorm, extra };
+        const dt = extra.dt ?? 0;
+        if (this._engineAudioPeriod > 0) {
+            this._engineAudioAcc += dt;
+            if (this._engineAudioAcc < this._engineAudioPeriod) return;
+            this._engineAudioAcc = 0;
+        }
+        this._flushEngineAudio();
+    }
+
+    _flushEngineAudio() {
+        const pending = this._pendingEngine;
+        if (!pending) return;
+        const { throttle, airspeedNorm, extra } = pending;
         const gLoad = extra.gLoad ?? 1;
         const turnRate = extra.turnRate ?? 0;
         const boosting = !!extra.boosting;
@@ -801,9 +833,19 @@ export class AudioManager {
             * this.cfg.engine_volume
             * (this._paused ? 0 : 1);
 
+        const eps = this._engineAudioEps;
+        const last = this._lastEng;
+
         if (this.engineAudio?.buffer) {
-            this.engineAudio.setPlaybackRate(pitch);
-            this.engineAudio.setVolume(Math.max(0.0001, engVol));
+            if (Math.abs(pitch - last.pitch) > eps) {
+                this.engineAudio.setPlaybackRate(pitch);
+                last.pitch = pitch;
+            }
+            const vol = Math.max(0.0001, engVol);
+            if (Math.abs(vol - last.vol) > eps) {
+                this.engineAudio.setVolume(vol);
+                last.vol = vol;
+            }
             if (!this.engineAudio.isPlaying && this._canPlay()) {
                 try { this.engineAudio.play(); } catch { /* */ }
             }
@@ -823,8 +865,15 @@ export class AudioManager {
         );
         const windVol = (0.03 + windAmt * 0.62) * this.cfg.wind_volume * (this._paused ? 0 : 1);
         if (this.windAudio?.buffer) {
-            this.windAudio.setPlaybackRate(windPitch);
-            this.windAudio.setVolume(Math.max(0.0001, windVol));
+            if (Math.abs(windPitch - last.windPitch) > eps) {
+                this.windAudio.setPlaybackRate(windPitch);
+                last.windPitch = windPitch;
+            }
+            const wv = Math.max(0.0001, windVol);
+            if (Math.abs(wv - last.windVol) > eps) {
+                this.windAudio.setVolume(wv);
+                last.windVol = wv;
+            }
             if (!this.windAudio.isPlaying && this._canPlay()) {
                 try { this.windAudio.play(); } catch { /* */ }
             }
@@ -833,9 +882,17 @@ export class AudioManager {
         const abVol = boosting
             ? this.cfg.afterburner_volume * (0.6 + tCurve * 0.5)
             : 0.0001;
+        const abPitch = boosting ? 1.02 + sCurve * 0.12 : 1;
         if (this.afterburnerAudio?.buffer) {
-            this.afterburnerAudio.setPlaybackRate(boosting ? 1.02 + sCurve * 0.12 : 1);
-            this.afterburnerAudio.setVolume(Math.max(0.0001, abVol * (this._paused ? 0 : 1)));
+            if (Math.abs(abPitch - last.abPitch) > eps) {
+                this.afterburnerAudio.setPlaybackRate(abPitch);
+                last.abPitch = abPitch;
+            }
+            const av = Math.max(0.0001, abVol * (this._paused ? 0 : 1));
+            if (Math.abs(av - last.abVol) > eps * 0.5 || (boosting !== (last.abVol > 0.01))) {
+                this.afterburnerAudio.setVolume(av);
+                last.abVol = av;
+            }
             if (!this.afterburnerAudio.isPlaying && this._canPlay()) {
                 try { this.afterburnerAudio.play(); } catch { /* */ }
             }

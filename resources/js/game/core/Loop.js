@@ -1,5 +1,6 @@
 /**
  * 主迴圈：封裝 requestAnimationFrame 與 dt 夾制，遊戲邏輯只收到 (dt, elapsedSeconds)。
+ * 過大的 dt spike 會放大物理／相機頓感，故可於飛行中收緊 maxDelta。
  */
 export class Loop {
     /**
@@ -13,6 +14,11 @@ export class Loop {
         this.lastTime = 0;
         this._raf = 0;
         this._tick = this._tick.bind(this);
+    }
+
+    /** @param {number} seconds */
+    setMaxDelta(seconds) {
+        this.maxDelta = Math.max(0.016, seconds);
     }
 
     start() {

@@ -225,9 +225,9 @@ export const DEFAULTS = Object.freeze({
         water_level: 0,
         water_size: 10000,
         water_segments: 32,
-        water_reflection_size: 256,
-        /** 水面反射每隔幾幀重繪（1=每幀；2=隔幀） */
-        water_reflection_interval: 2,
+        water_reflection_size: 128,
+        /** 水面反射每隔幾幀重繪（1=每幀；2=隔幀；選單／展示用） */
+        water_reflection_interval: 3,
         water_distortion: 3.7,
         water_normal_scale: 4,
         water_wave_speed: 1,
@@ -240,7 +240,7 @@ export const DEFAULTS = Object.freeze({
     },
     /**
      * 幀率降載：非關鍵系統降頻、像素比上限。
-     * 不影響 PostFx 安全預設（grade／HDR 仍關閉）。
+     * flight_* 僅在 PLAYING 套用；不影響 PostFx 安全預設（grade／HDR 仍關閉）。
      */
     performance: {
         max_pixel_ratio: 1.5,
@@ -253,7 +253,29 @@ export const DEFAULTS = Object.freeze({
         ai_far_skip_frames: 1,
         ai_far_distance: 420,
         max_simultaneous_booms: 4,
-        ambient_boom_enabled: true,
+        ambient_boom_enabled: false,
+        /** 飛行中像素比上限（進關時套用，出關還原） */
+        flight_max_pixel_ratio: 1.25,
+        /** 飛行中水面反射隔幀（0=完全關閉反射重繪） */
+        flight_water_reflection_interval: 0,
+        /** 飛行中雲 billboard／uniforms 每 N 幀更新一次 */
+        flight_cloud_update_stride: 3,
+        /** 穿雲密度採樣 Hz */
+        flight_cloud_density_hz: 8,
+        /** 高度霧重算 Hz */
+        flight_fog_hz: 6,
+        /** 引擎／風切／加力音參數更新 Hz（避免 WebAudio thrashing） */
+        flight_engine_audio_hz: 12,
+        /** 音量／pitch 變更門檻（低於此不呼叫 setVolume／setPlaybackRate） */
+        flight_engine_audio_epsilon: 0.012,
+        /** 飛行中飛彈地形 LOS 採樣數（覆寫 terrain.los_samples） */
+        flight_los_samples: 10,
+        /** 飛行中飛彈煙跡最小生成間隔（秒） */
+        flight_missile_smoke_interval: 0.14,
+        /** 飛行中遠距 AI 隔幀略過數（較大＝更省） */
+        flight_ai_far_skip_frames: 2,
+        /** dt 夾制上限（秒）；過大 spike 會放大頓感 */
+        flight_max_delta: 0.04,
     },
     terrain: {
         size: 3200,

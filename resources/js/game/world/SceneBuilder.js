@@ -120,6 +120,13 @@ export class SceneBuilder {
         this._lensflare = null;
         this._cloudPlaneGeo = null;
         this._tmp = new THREE.Vector3();
+        this._fogColor = new THREE.Color();
+        this._lastFogAlt = Number.NaN;
+        this._lastFogDens = Number.NaN;
+        /** 雲 billboard／uniforms 更新步幅（1=每幀）；飛行中可提高 */
+        this.cloudUpdateStride = 1;
+        /** 高度霧重算最小高度差（公尺）；飛行中可加大 */
+        this.fogAltitudeEpsilon = 2;
         scene.add(this.decor);
     }
 
@@ -133,17 +140,27 @@ export class SceneBuilder {
         this.rebuildDecor();
     }
 
-    /** 高度霧：低空較濃、高空較稀。 */
-    _applyHeightFog(altitude) {
+    /** 高度霧：低空較濃、高空較稀。複用 Color，避免每幀 new 觸發 GC。 */
+    _applyHeightFog(altitude, force = false) {
+        const eps = this.fogAltitudeEpsilon;
+        if (!force && Number.isFinite(this._lastFogAlt) && Math.abs(altitude - this._lastFogAlt) < eps) {
+            return;
+        }
+        this._lastFogAlt = altitude;
+
         const h = this._fogHeight;
         const t = Math.max(0, Math.min(0.85, altitude / (h * 2.2)));
         const dens = this._fogBase * (1.35 - t);
-        const color = new THREE.Color().setHSL(0.58, 0.42, 0.16 + Math.min(0.14, altitude / 900));
+        this._fogColor.setHSL(0.58, 0.42, 0.16 + Math.min(0.14, altitude / 900));
         if (!this.scene.fog || !(this.scene.fog instanceof THREE.FogExp2)) {
-            this.scene.fog = new THREE.FogExp2(color.getHex(), dens);
-        } else {
-            this.scene.fog.color.copy(color);
+            this.scene.fog = new THREE.FogExp2(this._fogColor.getHex(), dens);
+            this._lastFogDens = dens;
+            return;
+        }
+        this.scene.fog.color.copy(this._fogColor);
+        if (!Number.isFinite(this._lastFogDens) || Math.abs(dens - this._lastFogDens) > 1e-7) {
             this.scene.fog.density = dens;
+            this._lastFogDens = dens;
         }
     }
 
@@ -454,9 +471,10 @@ export class SceneBuilder {
         let dens = 0;
         for (const cg of this.cloudGroups) {
             const r = cg.userData.radius || 40;
-            const d = position.distanceTo(cg.position);
-            if (d < r) {
-                dens = Math.max(dens, 1 - d / r);
+            const r2 = r * r;
+            const d2 = position.distanceToSquared(cg.position);
+            if (d2 < r2) {
+                dens = Math.max(dens, 1 - Math.sqrt(d2) / r);
             }
         }
         return dens;
@@ -527,8 +545,14 @@ export class SceneBuilder {
      * @param {number} time
      * @param {THREE.Camera} [camera]
      */
-    update(dt, time, camera = null) {
-        if (camera) this._applyHeightFog(camera.position.y);
+    /**
+     * @param {number} dt
+     * @param {number} time
+     * @param {THREE.Camera} [camera]
+     * @param {{ updateFog?: boolean }} [opts]
+     */
+    update(dt, time, camera = null, opts = {}) {
+        if (camera && opts.updateFog !== false) this._applyHeightFog(camera.position.y);
 
         // Lensflare 錨在相機前方陽光方向
         if (this._flareAnchor && camera) {
@@ -539,25 +563,30 @@ export class SceneBuilder {
         }
 
         this._cloudTick = (this._cloudTick | 0) + 1;
+        const stride = Math.max(1, this.cloudUpdateStride | 0);
+        const doCloudVisual = (this._cloudTick % stride) === 0;
         const camPos = camera?.position;
         for (const cg of this.cloudGroups) {
             cg.position.x += (cg.userData.drift || 3) * dt * 0.35;
             if (cg.position.x > 2300) cg.position.x = -2300;
 
-            // 遠雲隔幀更新 uniforms／billboard，近雲每幀
+            if (!doCloudVisual) continue;
+
+            // 遠雲再降頻：近雲依 stride，遠雲約 2×stride
             let near = true;
             if (camPos) {
                 const dx = cg.position.x - camPos.x;
                 const dz = cg.position.z - camPos.z;
                 near = (dx * dx + dz * dz) < 900000; // ~950m
             }
-            if (!near && (this._cloudTick & 1) === 0) continue;
+            if (!near && (this._cloudTick % (stride * 2)) !== 0) continue;
 
             for (const child of cg.children) {
                 if (child.material?.uniforms?.uTime) {
                     child.material.uniforms.uTime.value = time;
                 }
-                if (child.material?.uniforms?.uSunDir) {
+                // 太陽方向極少變動；僅在近雲幀寫入即可
+                if (near && child.material?.uniforms?.uSunDir) {
                     child.material.uniforms.uSunDir.value.copy(this.sunDirection);
                 }
                 if (camera && child.userData.billboard) {

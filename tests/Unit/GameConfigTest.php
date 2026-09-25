@@ -20,9 +20,32 @@ class GameConfigTest extends TestCase
     {
         $config = $this->config();
 
-        foreach (['mission', 'player', 'flight', 'weapons', 'enemy', 'enemies', 'boss', 'waves', 'environment', 'terrain', 'ground_defense', 'gpws', 'audio', 'radio', 'weather', 'stunts', 'visual', 'pools', 'pickups', 'hud', 'scoring', 'perks', 'meta', 'achievements'] as $section) {
+        foreach (['mission', 'player', 'flight', 'weapons', 'enemy', 'enemies', 'boss', 'waves', 'environment', 'terrain', 'ground_defense', 'gpws', 'audio', 'radio', 'weather', 'stunts', 'visual', 'pools', 'pickups', 'hud', 'scoring', 'perks', 'meta', 'achievements', 'performance'] as $section) {
             $this->assertArrayHasKey($section, $config, "缺少設定區塊：{$section}");
         }
+    }
+
+    public function test_flight_performance_knobs_exist(): void
+    {
+        $perf = $this->config()['performance'];
+
+        foreach ([
+            'max_pixel_ratio', 'flight_max_pixel_ratio', 'flight_water_reflection_interval',
+            'flight_cloud_update_stride', 'flight_cloud_density_hz', 'flight_fog_hz',
+            'flight_engine_audio_hz', 'flight_engine_audio_epsilon', 'flight_los_samples',
+            'flight_missile_smoke_interval', 'flight_ai_far_skip_frames', 'flight_max_delta',
+        ] as $key) {
+            $this->assertArrayHasKey($key, $perf, "缺少 performance.{$key}");
+        }
+
+        $this->assertFalse($perf['ambient_boom_enabled']);
+        $this->assertSame(0, (int) $perf['flight_water_reflection_interval']);
+        $this->assertLessThanOrEqual($perf['max_pixel_ratio'], $perf['flight_max_pixel_ratio'] + 0.5);
+        $this->assertLessThanOrEqual(1.25, (float) $perf['flight_max_pixel_ratio']);
+        $this->assertGreaterThan(0, $perf['flight_cloud_update_stride']);
+        $this->assertGreaterThan(0, $perf['flight_engine_audio_hz']);
+        $this->assertGreaterThan(0, $perf['flight_los_samples']);
+        $this->assertLessThan(24, (int) $perf['flight_los_samples']);
     }
 
     public function test_perks_meta_and_achievements_are_configured(): void

@@ -6,6 +6,9 @@ import { createProceduralWaterNormals } from './textureFallbacks.js';
 /**
  * WaterSystem — 官方 Water.js：法線動態海浪、太陽高光、鏡面反射。
  * 取代舊有自製反射 RT；與地形共存於低窪／外圍。
+ *
+ * 反射重繪可隔幀／關閉：飛行時相機每幀移動，onBeforeRender 內的整場景
+ * mirrorCamera 重繪是最大 GPU 成本之一。
  */
 export class WaterSystem {
     /**
@@ -76,19 +79,33 @@ export class WaterSystem {
         );
 
         this.mesh = this.water;
-        // 隔幀反射：保留上一幀 mirror RT，省掉每幀整場景 mirrorCamera 重繪
-        const interval = Math.max(1, cfg.water_reflection_interval ?? 2);
-        this._reflectionInterval = interval;
+        this._reflectionInterval = Math.max(0, cfg.water_reflection_interval ?? 2);
         this._reflectionFrame = 0;
-        if (interval > 1 && typeof this.water.onBeforeRender === 'function') {
+        this._reflectionEnabled = this._reflectionInterval > 0;
+
+        if (typeof this.water.onBeforeRender === 'function') {
             const original = this.water.onBeforeRender;
+            this._originalOnBeforeRender = original;
             this.water.onBeforeRender = (renderer, sceneRef, camera) => {
+                if (!this._reflectionEnabled || this._reflectionInterval <= 0) return;
                 this._reflectionFrame += 1;
                 if (this._reflectionFrame % this._reflectionInterval !== 0) return;
                 original.call(this.water, renderer, sceneRef, camera);
             };
         }
+
         scene.add(this.water);
+    }
+
+    /**
+     * 動態調整反射重繪節奏。
+     * @param {number} interval 0 = 關閉重繪（保留上一張 mirror RT）；1 = 每幀；N = 每 N 幀
+     */
+    setReflectionInterval(interval) {
+        const n = Math.max(0, interval | 0);
+        this._reflectionInterval = n;
+        this._reflectionEnabled = n > 0;
+        if (n > 0) this._reflectionFrame = 0;
     }
 
     /** 水面高度（與碰撞／飛沫對齊）。 */

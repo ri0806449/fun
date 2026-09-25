@@ -210,8 +210,8 @@ return [
         'water_level' => 0.0,
         'water_size' => 10000.0,
         'water_segments' => 32,
-        'water_reflection_size' => 256,
-        'water_reflection_interval' => 2,
+        'water_reflection_size' => 128,
+        'water_reflection_interval' => 3,
         'water_distortion' => 3.7,
         'water_normal_scale' => 4.0,
         'water_wave_speed' => 1.0,
@@ -389,7 +389,7 @@ return [
 
     /*
     | 幀率降載（前端 GameCore 讀取）。
-    | 不影響 PostFx 安全預設（grade／HDR 仍關閉）。
+    | flight_* 僅在 PLAYING 套用；不影響 PostFx 安全預設（grade／HDR 仍關閉）。
     */
     'performance' => [
         'max_pixel_ratio' => 1.5,
@@ -402,7 +402,18 @@ return [
         'ai_far_skip_frames' => 1,
         'ai_far_distance' => 420,
         'max_simultaneous_booms' => 4,
-        'ambient_boom_enabled' => true,
+        'ambient_boom_enabled' => false,
+        'flight_max_pixel_ratio' => 1.25,
+        'flight_water_reflection_interval' => 0,
+        'flight_cloud_update_stride' => 3,
+        'flight_cloud_density_hz' => 8,
+        'flight_fog_hz' => 6,
+        'flight_engine_audio_hz' => 12,
+        'flight_engine_audio_epsilon' => 0.012,
+        'flight_los_samples' => 10,
+        'flight_missile_smoke_interval' => 0.14,
+        'flight_ai_far_skip_frames' => 2,
+        'flight_max_delta' => 0.04,
     ],
 
     'pickups' => [
