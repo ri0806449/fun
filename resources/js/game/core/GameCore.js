@@ -662,12 +662,12 @@ export class GameCore {
         if (scale < 1.5 && this._activeBoomBudget >= maxBooms) {
             // 小爆炸超預算：只播音＋輕震，略過粒子
             this.audio.boom(scale * 0.7, pos);
-            this.cameraRig.addShake(0.2 * scale);
+            this.cameraRig.addShake(0.28 * scale);
             return;
         }
         this._activeBoomBudget += 1;
         this.audio.boom(scale, pos);
-        this.cameraRig.addShake(0.35 * scale);
+        this.cameraRig.addShake(0.48 * scale);
         this.explosionPool.spawnBoom(pos, scale);
         const dist = pos.distanceTo(this.camera.position);
         if (dist < 90) {
@@ -1370,6 +1370,7 @@ export class GameCore {
             dt,
         });
         this.player.updateExhaust(this.sceneBuilder.exhaustLight, time);
+        this.player.updateSurfaces(dt, time, { cloudDensity: this._cloudDensCache ?? 0 });
         this.contrails.update(dt, this.player, this.camera.position);
 
         const thr = this.player.throttle;
@@ -1405,10 +1406,18 @@ export class GameCore {
             this.radarAlt
         );
 
-        this.cameraRig.update(
-            dt, this.player.root, spdRatio, thr, this.player.boosting,
-            this.player.getRollAmount(), this.player.telemetry.gApprox
-        );
+        this.cameraRig.update(dt, this.player.root, {
+            airspeedNorm: spdRatio,
+            throttle: thr,
+            boosting: this.player.boosting,
+            rollAmt: this.player.getRollAmount(),
+            pitchRate: this.player.pitchRate,
+            rollRate: this.player.rollRate,
+            gLoad: this.player.telemetry.gApprox,
+            altitude: this.player.position.y,
+            cloudDensity: cloudDens,
+            time,
+        });
 
         // 盤旋：相機高速轉向時加粗雲 billboard／遠距編隊更新
         if (flying) {
@@ -1512,7 +1521,7 @@ export class GameCore {
         if (this.player.hp < this.lastHp - 1) {
             this.hud.flashDamage();
             this.audio.hit();
-            this.cameraRig.addShake(0.32);
+            this.cameraRig.addShake(0.45);
             this.postFx.pulseChromatic(0.75);
             this.radio?.trigger('damage');
         }

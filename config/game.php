@@ -44,6 +44,31 @@ return [
         'drag_coefficient' => 0.0026,
         'gravity' => 28.0,
         'lift_coefficient' => 3.4,
+        // 姿態率上限／輸入平滑／傾斜轉彎（與 resources/js/game/config.js 同步）
+        'max_pitch' => 1.05,
+        'max_roll' => 1.85,
+        'max_yaw' => 0.42,
+        'input_lerp' => 5.2,
+        'throttle_lerp' => 1.3,
+        'bank_turn' => 0.85,
+        /*
+        | 街機鬆鍵回正（ArcadeAssist）。改此處即可調回正速度／死區／大傾角加強。
+        | 與 resources/js/game/config.js flight.assist 同步。
+        */
+        'assist' => [
+            'enabled' => true,
+            'roll_deadzone' => 0.02,
+            'pitch_deadzone' => 0.02,
+            'yaw_deadzone' => 0.02,
+            'roll_level_rate' => 2.6,
+            'roll_level_excess_rad' => 0.7,
+            'roll_level_excess_mul' => 1.4,
+            'roll_level_speed_mul' => 0.35,
+            'roll_snap_rad' => 0.025,
+            'pitch_level_rate' => 0.48,
+            'pitch_level_cap' => 0.32,
+            'release_lerp_mul' => 1.35,
+        ],
     ],
 
     'weapons' => [
@@ -441,9 +466,49 @@ return [
 
     'hud' => [
         'radar_range' => 450,
-        'base_fov' => 55,
-        'max_fov' => 78,
+        // 基礎 FOV；Boost 平滑拉到 camera.boost_fov
+        'base_fov' => 60,
+        'max_fov' => 80,
         'crosshair_center_y' => 0.42,
+        /*
+        | Spring-mass 相機／控制面／顫動（改此處即可調運鏡與機體聯動）。
+        | 與 resources/js/game/config.js hud.camera 同步。
+        */
+        'camera' => [
+            'boost_fov' => 80,
+            'offset_x' => 2.2,
+            'offset_y' => 3.8,
+            'offset_z' => 15.5,
+            'look_x' => -0.5,
+            'look_y' => -0.5,
+            'look_z' => -32,
+            'stiffness' => 42,
+            'damping' => 10.5,
+            'look_stiffness' => 26,
+            'look_damping' => 8.2,
+            'boost_pull_z' => 6.5,
+            'boost_pull_y' => 1.1,
+            'boost_pull_approach' => 2.6,
+            'look_ahead_roll' => 9.5,
+            'look_ahead_pitch' => 7.5,
+            'fov_approach' => 9,
+            'shake_decay' => 0.028,
+            'shake_pos_mul' => 2.4,
+            'shake_rot_mul' => 0.045,
+            'turbulence_low_alt_ceil' => 28,
+            'turbulence_low_alt_amp' => 0.022,
+            'turbulence_speed_amp' => 0.014,
+            'turbulence_cloud_amp' => 0.03,
+            'turbulence_boost_amp' => 0.012,
+            'turbulence_freq' => 3.8,
+            'aileron_max_rad' => 0.42,
+            'elevator_max_rad' => 0.38,
+            'surface_lerp' => 10,
+            'nozzle_boost_scale' => 1.35,
+            'body_turbulence_amp' => 0.055,
+            'body_turbulence_low_alt_ceil' => 28,
+            'body_turbulence_freq' => 5.2,
+        ],
     ],
 
     'scoring' => [

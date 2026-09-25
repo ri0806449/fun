@@ -96,6 +96,6 @@
         </div>
     </div>
 
-    <div id="help">W/S 俯仰 · A/D 滾轉 · Q/E 舵 · Shift/Ctrl 油門 · R 加力 · F 導彈 · Space 機砲 · ESC 暫停 · M 靜音</div>
+    <div id="help">W/S 俯仰 · A/D 滾轉（鬆開回平）· Q/E 舵 · Shift/Ctrl 油門 · R 加力 · F 導彈 · Space 機砲 · ESC 暫停 · M 靜音</div>
     <button id="mute-btn" type="button" title="靜音">&#128266;</button>
 </div>

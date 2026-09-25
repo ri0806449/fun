@@ -22,8 +22,8 @@
         @include('game.partials.leaderboard', ['leaderboard' => $leaderboard])
     </div>
 
-    <p>START · 純鍵盤飛行 · 滑鼠選升級</p>
-    <p class="menu-help">W/S 俯仰 · A/D 滾轉 · Q/E 舵 · Shift/Ctrl 油門 · R 加力 · Space 機砲 · F 飛彈 · Esc 暫停</p>
+    <p>START · 純鍵盤飛行（鬆鍵自動回正）· 滑鼠選升級</p>
+    <p class="menu-help">W/S 俯仰 · A/D 滾轉（鬆開回平）· Q/E 舵（鬆開回中）· Shift/Ctrl 油門 · R 加力 · Space 機砲 · F 飛彈 · Esc 暫停</p>
     <p class="menu-help">擊退敵波後可選局內 Perk · 零件於機庫永久強化</p>
 </div>
 

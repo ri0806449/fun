@@ -2,7 +2,8 @@ import { MathUtils } from 'three';
 
 /**
  * MouseAim — 舊版滑鼠虛擬搖桿（已停用）。
- * 飛行改為純鍵盤；保留此類別供參考，GameCore 不再綁定／驅動飛機。
+ * 飛行改為純鍵盤 + ArcadeAssist 鬆鍵回正；保留此類別供參考，GameCore 不再綁定／驅動飛機。
+ * 若日後重開 MouseAim，應與鍵盤指令在死區／權重上協調，避免「越打越歪」。
  */
 export class MouseAim {
     constructor({ centerY = 0.42 } = {}) {

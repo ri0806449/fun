@@ -206,12 +206,70 @@ class GameConfigTest extends TestCase
         $this->assertGreaterThanOrEqual(0.9, $visual['bloom_threshold']);
     }
 
+    public function test_hud_camera_spring_and_fov_contract(): void
+    {
+        $hud = $this->config()['hud'];
+
+        $this->assertSame(60.0, (float) $hud['base_fov']);
+        $this->assertSame(80.0, (float) $hud['max_fov']);
+        $this->assertArrayHasKey('camera', $hud);
+
+        $cam = $hud['camera'];
+        foreach ([
+            'boost_fov', 'stiffness', 'damping', 'look_stiffness', 'look_damping',
+            'boost_pull_z', 'boost_pull_y', 'look_ahead_roll', 'look_ahead_pitch',
+            'fov_approach', 'shake_decay', 'shake_pos_mul', 'shake_rot_mul',
+            'turbulence_low_alt_ceil', 'turbulence_low_alt_amp', 'turbulence_speed_amp',
+            'turbulence_cloud_amp', 'turbulence_boost_amp', 'turbulence_freq',
+            'aileron_max_rad', 'elevator_max_rad', 'surface_lerp', 'nozzle_boost_scale',
+            'body_turbulence_amp', 'body_turbulence_low_alt_ceil', 'body_turbulence_freq',
+        ] as $key) {
+            $this->assertArrayHasKey($key, $cam, "缺少 hud.camera.{$key}");
+        }
+
+        $this->assertSame(80.0, (float) $cam['boost_fov']);
+        $this->assertGreaterThan(0, $cam['stiffness']);
+        $this->assertGreaterThan(0, $cam['damping']);
+        $this->assertGreaterThan($cam['look_damping'], $cam['look_stiffness']);
+        $this->assertGreaterThan(0, $cam['aileron_max_rad']);
+        $this->assertGreaterThan(0, $cam['elevator_max_rad']);
+        $this->assertGreaterThan(1.0, (float) $cam['nozzle_boost_scale']);
+    }
+
     public function test_stall_speed_is_below_cruise_speed(): void
     {
         $flight = $this->config()['flight'];
 
         $this->assertLessThan($flight['cruise_speed'], $flight['stall_speed']);
         $this->assertLessThan($flight['max_speed'], $flight['cruise_speed']);
+    }
+
+    public function test_flight_arcade_assist_contract(): void
+    {
+        $flight = $this->config()['flight'];
+
+        foreach (['max_pitch', 'max_roll', 'max_yaw', 'input_lerp', 'throttle_lerp', 'bank_turn'] as $key) {
+            $this->assertArrayHasKey($key, $flight, "缺少 flight.{$key}");
+            $this->assertGreaterThan(0, (float) $flight[$key]);
+        }
+
+        $this->assertArrayHasKey('assist', $flight);
+        $assist = $flight['assist'];
+        foreach ([
+            'enabled', 'roll_deadzone', 'pitch_deadzone', 'yaw_deadzone',
+            'roll_level_rate', 'roll_level_excess_rad', 'roll_level_excess_mul',
+            'roll_level_speed_mul', 'roll_snap_rad', 'pitch_level_rate',
+            'pitch_level_cap', 'release_lerp_mul',
+        ] as $key) {
+            $this->assertArrayHasKey($key, $assist, "缺少 flight.assist.{$key}");
+        }
+
+        $this->assertTrue($assist['enabled']);
+        $this->assertGreaterThan(0, (float) $assist['roll_level_rate']);
+        $this->assertGreaterThan(0, (float) $assist['pitch_level_rate']);
+        $this->assertLessThan(1, (float) $assist['pitch_level_cap']);
+        $this->assertGreaterThan(1, (float) $assist['release_lerp_mul']);
+        $this->assertLessThan((float) $flight['max_roll'], (float) $assist['roll_level_excess_rad']);
     }
 
     public function test_elite_enemies_are_tougher_than_regulars(): void
@@ -247,5 +305,4 @@ class GameConfigTest extends TestCase
         $this->assertSame(20.0, (float) $stunts['low_alt_agl']);
         $this->assertGreaterThan(0, $stunts['close_call_score']);
     }
-
 }

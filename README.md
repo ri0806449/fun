@@ -85,6 +85,10 @@ POST body：
 
 改 `config/game.php`（飛行、武器、敵機、波次、計分…），重新整理頁面即可，不必改 JS。
 
+飛行手感（鬆鍵滾轉回平／俯仰適度回中）在 `flight.assist`；與 `resources/js/game/config.js` 同步。
+
+操作：W/S 俯仰 · A/D 滾轉（鬆開回平）· Q/E 舵 · Shift/Ctrl 油門 · R 加力 · Space 機砲 · F 飛彈。
+
 ## 測試
 
 ```bash
