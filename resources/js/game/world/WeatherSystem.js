@@ -22,6 +22,10 @@ export class WeatherSystem {
         this._rain = null;
         this._rainGeo = null;
         this._rainMat = null;
+        this._rainStrideCursor = 0;
+        this._skyDirty = true;
+        this._lastDusk = -1;
+        this._lastRain = -1;
         this._baseElev = sceneBuilder?.env?.sky_elevation ?? 3.2;
         this._baseFog = sceneBuilder?._fogBase ?? 0.00068;
         this._baseSun = sceneBuilder?.env?.sun_intensity ?? 0.38;
@@ -30,7 +34,7 @@ export class WeatherSystem {
     }
 
     _buildRain() {
-        const count = this.cfg.rain_particles ?? 1400;
+        const count = this.cfg.rain_particles ?? 480;
         const positions = new Float32Array(count * 3);
         for (let i = 0; i < count; i++) {
             positions[i * 3] = (Math.random() - 0.5) * 80;
@@ -102,7 +106,15 @@ export class WeatherSystem {
         }
         this.rainIntensity = rainBlend;
 
-        this._applySky(duskBlend, rainBlend);
+        // Sky／fog／燈光變動緩慢，由外部以 weather_hz 降頻呼叫 forceSky 或內部偵測顯著變化
+        const duskDelta = Math.abs(duskBlend - this._lastDusk);
+        const rainDelta = Math.abs(rainBlend - this._lastRain);
+        if (this._skyDirty || duskDelta > 0.02 || rainDelta > 0.02 || phaseChanged) {
+            this._applySky(duskBlend, rainBlend);
+            this._lastDusk = duskBlend;
+            this._lastRain = rainBlend;
+            this._skyDirty = false;
+        }
         this._updateRain(dt, camera, rainBlend);
 
         let radarGlitch = false;
@@ -166,8 +178,11 @@ export class WeatherSystem {
         this._rain.position.copy(camera.position);
         const pos = this._rainGeo.attributes.position;
         const arr = pos.array;
-        const fall = (this.cfg.rain_speed ?? 42) * dt * (0.7 + intensity);
-        for (let i = 0; i < arr.length; i += 3) {
+        const stride = Math.max(1, this.cfg.rain_update_stride ?? 2);
+        const fall = (this.cfg.rain_speed ?? 42) * dt * stride * (0.7 + intensity);
+        const start = this._rainStrideCursor % stride;
+        this._rainStrideCursor = (this._rainStrideCursor + 1) % stride;
+        for (let i = start * 3; i < arr.length; i += 3 * stride) {
             arr[i + 1] -= fall * (0.7 + (i % 7) * 0.08);
             if (arr[i + 1] < -5) {
                 arr[i] = (Math.random() - 0.5) * 80;

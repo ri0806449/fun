@@ -183,8 +183,8 @@ return [
         'sea_spray_altitude' => 15.0,
         'crash_altitude' => 2.0,
         'island_count' => 4,
-        'cloud_count' => 28,
-        'cloud_quality' => 1, // 0=低 1=中 2=高（雲解析度／塊數倍率）
+        'cloud_count' => 18,
+        'cloud_quality' => 0, // 0=低 1=中 2=高（雲解析度／塊數倍率）
         'fog_density' => 0.00068,
         'fog_height' => 220.0,
         // Sky.js 大氣（低仰角＋厚霾；太陽盤另以 sky_sun_disc 壓亮度）
@@ -211,6 +211,7 @@ return [
         'water_size' => 10000.0,
         'water_segments' => 32,
         'water_reflection_size' => 256,
+        'water_reflection_interval' => 2,
         'water_distortion' => 3.7,
         'water_normal_scale' => 4.0,
         'water_wave_speed' => 1.0,
@@ -281,8 +282,8 @@ return [
         'max_distance' => 480.0,
         'ref_distance' => 28.0,
         'rolloff' => 1.15,
-        'max_positional' => 22,
-        'positional_cull_distance' => 520.0,
+        'max_positional' => 12,
+        'positional_cull_distance' => 380.0,
         'engine_throttle_exp' => 1.15,
         'engine_speed_exp' => 1.1,
         'engine_pitch_min' => 0.88,
@@ -333,8 +334,9 @@ return [
         'turbidity_clear' => 10.0,
         'turbidity_rain' => 18.0,
         'fog_mul_rain' => 2.4,
-        'rain_particles' => 1400,
+        'rain_particles' => 480,
         'rain_speed' => 42.0,
+        'rain_update_stride' => 2,
         'radar_glitch_interval' => 7.5,
         'radar_glitch_duration' => 0.55,
     ],
@@ -372,16 +374,35 @@ return [
         'radial_blur' => 0.75,
         'force_hdr' => false,
         'composer_enabled' => true,
-        'contrail_capacity' => 64,
+        'contrail_capacity' => 48,
         'contrail_g_threshold' => 2.2,
-        'contrail_interval' => 0.045,
+        'contrail_interval' => 0.06,
     ],
 
     'pools' => [
-        'bullets' => 220,
-        'missiles' => 42,
-        'explosions' => 96,
-        'max_trail_particles' => 90,
+        'bullets' => 180,
+        'missiles' => 36,
+        'explosions' => 72,
+        'max_trail_particles' => 56,
+        'boom_particle_count' => 8,
+    ],
+
+    /*
+    | 幀率降載（前端 GameCore 讀取）。
+    | 不影響 PostFx 安全預設（grade／HDR 仍關閉）。
+    */
+    'performance' => [
+        'max_pixel_ratio' => 1.5,
+        'antialias' => true,
+        'radar_hz' => 12,
+        'world_hud_hz' => 20,
+        'weather_hz' => 5,
+        'hud_bars_hz' => 15,
+        'spatial_audio_hz' => 20,
+        'ai_far_skip_frames' => 1,
+        'ai_far_distance' => 420,
+        'max_simultaneous_booms' => 4,
+        'ambient_boom_enabled' => true,
     ],
 
     'pickups' => [

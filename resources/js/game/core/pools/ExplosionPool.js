@@ -6,9 +6,10 @@ import { ObjectPool } from './ObjectPool.js';
  * 池內固定比例混入 flash 與 PointLight，避免執行期新建。
  */
 export class ExplosionPool extends ObjectPool {
-    constructor(scene, capacity, { maxTrailParticles = 90 } = {}) {
+    constructor(scene, capacity, { maxTrailParticles = 90, boomParticleCount = 8 } = {}) {
         super(scene, capacity);
         this.maxTrailParticles = maxTrailParticles;
+        this.boomParticleCount = boomParticleCount;
         const boomGeo = new THREE.SphereGeometry(0.4, 5, 5);
         const flashGeo = new THREE.SphereGeometry(3.2, 10, 10);
 
@@ -91,11 +92,13 @@ export class ExplosionPool extends ObjectPool {
 
     spawnBoom(pos, scale = 1) {
         const colors = [0xffaa22, 0xff6600, 0xffee88, 0xff3300];
-        const n = Math.min(14, this.free.length);
+        const budget = Math.max(4, this.boomParticleCount ?? 8);
+        const n = Math.min(budget, this.free.length);
+        const smokeFrom = Math.max(2, Math.floor(n * 0.7));
         for (let i = 0; i < n; i++) {
             const mesh = this._takeMesh();
             if (!mesh) continue;
-            const isSmoke = i > 9;
+            const isSmoke = i >= smokeFrom;
             this._activate(mesh, pos, {
                 type: 'boom',
                 life: isSmoke ? 0.9 : 0.55,

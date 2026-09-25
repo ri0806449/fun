@@ -192,6 +192,13 @@ export class PostFx {
         if (this._composerHdr) {
             this.composer.addPass(new OutputPass());
         }
+
+        // 僅有 RenderPass 時 composer 等於多一次 RT blit，直接關掉走 renderer.render
+        const hasExtra = bloomEnabled || gradeEnabled || this._composerHdr;
+        if (!hasExtra) {
+            this.composer = null;
+            this._useComposer = false;
+        }
     }
 
     setSize(width, height) {

@@ -386,9 +386,9 @@ export class SceneBuilder {
      * FBM 噪點積雲片：多層錯開平面，柔邊 alpha，避免圓盤／甜甜圈外觀。
      */
     _buildClouds() {
-        const total = Math.max(0, this.env.cloud_count ?? 42);
-        const quality = this.env.cloud_quality ?? 1; // 0=低 1=中 2=高
-        const sheetsMul = quality >= 2 ? 1.15 : quality >= 1 ? 1 : 0.7;
+        const total = Math.max(0, this.env.cloud_count ?? 18);
+        const quality = this.env.cloud_quality ?? 0; // 0=低 1=中 2=高
+        const sheetsMul = quality >= 2 ? 1.15 : quality >= 1 ? 1 : 0.55;
 
         const perLayer = [
             Math.round(total * 0.28),
@@ -406,7 +406,7 @@ export class SceneBuilder {
                     : layer === 1 ? 0.44 + Math.random() * 0.26 : 0.32 + Math.random() * 0.2;
                 const cg = new THREE.Group();
                 const scale = (layer === 0 ? 90 : layer === 1 ? 62 : 120) + Math.random() * (layer === 2 ? 130 : 70);
-                const sheetCount = Math.max(3, Math.round((4 + Math.random() * 3) * sheetsMul));
+                const sheetCount = Math.max(2, Math.round((3 + Math.random() * 2.5) * sheetsMul));
 
                 for (let j = 0; j < sheetCount; j++) {
                     const seed = (i * 17.3 + j * 9.1 + layer * 31.7) % 100;
@@ -538,9 +538,21 @@ export class SceneBuilder {
             this._flareAnchor.visible = this.sunDirection.y > -0.05;
         }
 
+        this._cloudTick = (this._cloudTick | 0) + 1;
+        const camPos = camera?.position;
         for (const cg of this.cloudGroups) {
             cg.position.x += (cg.userData.drift || 3) * dt * 0.35;
             if (cg.position.x > 2300) cg.position.x = -2300;
+
+            // 遠雲隔幀更新 uniforms／billboard，近雲每幀
+            let near = true;
+            if (camPos) {
+                const dx = cg.position.x - camPos.x;
+                const dz = cg.position.z - camPos.z;
+                near = (dx * dx + dz * dz) < 900000; // ~950m
+            }
+            if (!near && (this._cloudTick & 1) === 0) continue;
+
             for (const child of cg.children) {
                 if (child.material?.uniforms?.uTime) {
                     child.material.uniforms.uTime.value = time;
@@ -548,7 +560,6 @@ export class SceneBuilder {
                 if (child.material?.uniforms?.uSunDir) {
                     child.material.uniforms.uSunDir.value.copy(this.sunDirection);
                 }
-                // 半數雲片對相機 billboard，其餘保持錯開固定姿態
                 if (camera && child.userData.billboard) {
                     child.quaternion.copy(camera.quaternion);
                 }
@@ -559,9 +570,12 @@ export class SceneBuilder {
             form.position.y += Math.sin(time * 0.4 + form.userData.phase) * 0.15;
             if (form.position.z < -3200) form.position.z = 200;
         }
-        for (const child of this.decor.children) {
-            if (child.userData.isBuoy) {
-                child.position.y = Math.sin(time * 1.5 + child.position.x * 0.01) * 0.6;
+        // 浮標動畫不需每幀；隔幀即可
+        if ((this._cloudTick & 1) === 1) {
+            for (const child of this.decor.children) {
+                if (child.userData.isBuoy) {
+                    child.position.y = Math.sin(time * 1.5 + child.position.x * 0.01) * 0.6;
+                }
             }
         }
     }

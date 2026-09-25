@@ -76,6 +76,18 @@ export class WaterSystem {
         );
 
         this.mesh = this.water;
+        // 隔幀反射：保留上一幀 mirror RT，省掉每幀整場景 mirrorCamera 重繪
+        const interval = Math.max(1, cfg.water_reflection_interval ?? 2);
+        this._reflectionInterval = interval;
+        this._reflectionFrame = 0;
+        if (interval > 1 && typeof this.water.onBeforeRender === 'function') {
+            const original = this.water.onBeforeRender;
+            this.water.onBeforeRender = (renderer, sceneRef, camera) => {
+                this._reflectionFrame += 1;
+                if (this._reflectionFrame % this._reflectionInterval !== 0) return;
+                original.call(this.water, renderer, sceneRef, camera);
+            };
+        }
         scene.add(this.water);
     }
 

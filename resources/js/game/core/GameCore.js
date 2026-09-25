@@ -81,6 +81,7 @@ export class GameCore {
         this.missilePool = new MissilePool(this.scene, config.pools.missiles, config.weapons.missile);
         this.explosionPool = new ExplosionPool(this.scene, config.pools.explosions, {
             maxTrailParticles: config.pools.max_trail_particles,
+            boomParticleCount: config.pools.boom_particle_count ?? 8,
         });
 
         this.player = new PlayerJet(this.scene, config);
@@ -169,6 +170,17 @@ export class GameCore {
         this.gpwsActive = false;
         this.gpwsAcc = 0;
         this.weather?.reset();
+        this._lastWx = null;
+        this._cloudDensCache = 0;
+        if (this._perfAcc) {
+            this._perfAcc.radar = 0;
+            this._perfAcc.worldHud = 0;
+            this._perfAcc.weather = 0;
+            this._perfAcc.hudBars = 0;
+            this._perfAcc.spatial = 0;
+            this._perfAcc.frame = 0;
+        }
+        this._activeBoomBudget = 0;
         this.stunts?.reset();
         this.radio?.reset();
         /** @type {FlyingFortress|null} */
@@ -201,13 +213,28 @@ export class GameCore {
             5500
         );
 
-        this.renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+        this.renderer = new THREE.WebGLRenderer({
+            antialias: this.config.performance?.antialias !== false,
+            powerPreference: 'high-performance',
+        });
         this.renderer.setSize(innerWidth, innerHeight);
-        this.renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+        const maxPr = this.config.performance?.max_pixel_ratio ?? 1.5;
+        this.renderer.setPixelRatio(Math.min(devicePixelRatio, maxPr));
         this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
         this.renderer.toneMappingExposure = this.config.visual?.tone_mapping_exposure ?? 0.5;
         this.renderer.outputColorSpace = THREE.SRGBColorSpace;
         this.container.appendChild(this.renderer.domElement);
+
+        // 非關鍵系統降頻累積器
+        this._perfAcc = {
+            radar: 0,
+            worldHud: 0,
+            weather: 0,
+            hudBars: 0,
+            spatial: 0,
+            frame: 0,
+        };
+        this._activeBoomBudget = 0;
     }
 
     // ── 狀態 ─────────────────────────────
@@ -350,6 +377,20 @@ export class GameCore {
         this.radarAlt = 0;
         this.gpwsActive = false;
         this.gpwsAcc = 0;
+        this._lastWx = null;
+        this._cloudDensCache = 0;
+        this._activeBoomBudget = 0;
+        if (this._perfAcc) {
+            this._perfAcc.radar = 0;
+            this._perfAcc.worldHud = 0;
+            this._perfAcc.weather = 0;
+            this._perfAcc.hudBars = 0;
+            this._perfAcc.spatial = 0;
+            this._perfAcc.frame = 0;
+        }
+        this.weather?.reset();
+        this.stunts?.reset();
+        this.radio?.reset();
         this._disposeBoss();
         this.bossTriggered = false;
         this.bossWarningT = 0;
@@ -492,6 +533,14 @@ export class GameCore {
     }
 
     spawnExplosion(pos, scale = 1) {
+        const maxBooms = this.config.performance?.max_simultaneous_booms ?? 4;
+        if (scale < 1.5 && this._activeBoomBudget >= maxBooms) {
+            // 小爆炸超預算：只播音＋輕震，略過粒子
+            this.audio.boom(scale * 0.7, pos);
+            this.cameraRig.addShake(0.2 * scale);
+            return;
+        }
+        this._activeBoomBudget += 1;
         this.audio.boom(scale, pos);
         this.cameraRig.addShake(0.35 * scale);
         this.explosionPool.spawnBoom(pos, scale);
@@ -1040,6 +1089,10 @@ export class GameCore {
     // ── 主迴圈 ───────────────────────────
 
     update(dt, time) {
+        const perf = this.config.performance ?? {};
+        this._perfAcc.frame += 1;
+        this._activeBoomBudget = 0;
+
         this.water.update(time, this.camera.position, this.sceneBuilder.sunDirection);
         this.sceneBuilder.update(dt, time, this.camera);
 
@@ -1049,6 +1102,7 @@ export class GameCore {
         const cloudWet = this.state === GameState.PLAYING
             ? this.sceneBuilder.sampleCloudDensity(this.camera.position)
             : 0;
+        this._cloudDensCache = cloudWet;
         this.postFx.update(
             time,
             this.state === GameState.PLAYING ? this.player.airspeedNorm : 0.2,
@@ -1124,18 +1178,28 @@ export class GameCore {
             this.foamAcc = 0;
         }
 
-        // 天氣／特技／無線電
+        // 天氣／特技／無線電（天氣 Sky 更新降頻）
         this.radio?.update(dt);
         this.radio?.noteTime(this.missionTime);
-        const wx = this.weather?.update(
-            dt,
-            this.elapsed,
-            this.config.mission.time_limit,
-            this.camera
-        ) ?? { rainIntensity: 0, radarGlitch: false, phaseChanged: false, phase: 'clear' };
-        if (wx.phase === 'rain' && wx.phaseChanged) this.radio?.noteRainStart();
-        this.hud.setRainOverlay?.(wx.rainIntensity ?? 0);
-        this.hud.setRadarGlitch?.(!!wx.radarGlitch);
+        this._perfAcc.weather += dt;
+        const weatherPeriod = 1 / Math.max(1, perf.weather_hz ?? 5);
+        let wx = this._lastWx ?? { rainIntensity: 0, radarGlitch: false, phaseChanged: false, phase: 'clear' };
+        if (this._perfAcc.weather >= weatherPeriod || !this._lastWx) {
+            this._perfAcc.weather = 0;
+            wx = this.weather?.update(
+                weatherPeriod,
+                this.elapsed,
+                this.config.mission.time_limit,
+                this.camera
+            ) ?? wx;
+            this._lastWx = wx;
+            if (wx.phase === 'rain' && wx.phaseChanged) this.radio?.noteRainStart();
+            this.hud.setRainOverlay?.(wx.rainIntensity ?? 0);
+            this.hud.setRadarGlitch?.(!!wx.radarGlitch);
+        } else if (this.weather?.enabled && (wx.rainIntensity ?? 0) > 0.05) {
+            // 雨滴粒子仍需跟相機；僅跳過 Sky／fog 重算
+            this.weather._updateRain?.(dt, this.camera, wx.rainIntensity);
+        }
 
         this.radarAlt = this.terrain.radarAltitude(this.player.position);
         const stunt = this.stunts?.update(dt, {
@@ -1162,7 +1226,7 @@ export class GameCore {
 
         const thr = this.player.throttle;
         this.trailAcc += dt;
-        const trailInterval = thr > 0.8 || this.player.boosting ? 0.09 : 0.14;
+        const trailInterval = thr > 0.8 || this.player.boosting ? 0.12 : 0.18;
         if (this.trailAcc > trailInterval && thr > 0.48) {
             this.trailAcc = 0;
             this.addContrail(new THREE.Vector3(0.48, -0.18, 4.8).applyMatrix4(this.player.mesh.matrixWorld));
@@ -1172,8 +1236,8 @@ export class GameCore {
         const spdRatio = this.player.airspeedNorm;
         this.hud.setSpeedFx(spdRatio, this.player.boosting);
 
-        // 穿雲：螢幕水滴 + 輕微視角震動
-        const cloudDens = this.sceneBuilder.sampleCloudDensity(this.camera.position);
+        // 穿雲：複用本幀已採樣密度
+        const cloudDens = this._cloudDensCache ?? 0;
         this.hud.setCloudFx(cloudDens);
         if (cloudDens > 0.25) {
             const shakeAmt = (this.config.environment?.cloud_shake ?? 0.055) * cloudDens;
@@ -1201,11 +1265,16 @@ export class GameCore {
         this._updateMissiles(dt);
         this.explosionPool.update(dt, this.camera.position, this.player.position);
 
-        this.audio.updateSpatial(dt, {
-            camera: this.camera,
-            missiles: this.missilePool.active,
-            enemies: this.waves.enemies,
-        });
+        this._perfAcc.spatial += dt;
+        const spatialPeriod = 1 / Math.max(1, perf.spatial_audio_hz ?? 20);
+        if (this._perfAcc.spatial >= spatialPeriod) {
+            this._perfAcc.spatial = 0;
+            this.audio.updateSpatial(spatialPeriod, {
+                camera: this.camera,
+                missiles: this.missilePool.active,
+                enemies: this.waves.enemies,
+            });
+        }
 
         // Boss 入場／更新
         if (this.bossPendingSpawn) {
@@ -1226,6 +1295,8 @@ export class GameCore {
             });
         }
 
+        const aiFarDist = perf.ai_far_distance ?? 420;
+        const aiSkip = Math.max(0, perf.ai_far_skip_frames ?? 1);
         const aiCtx = {
             dt,
             player: this.player,
@@ -1234,8 +1305,17 @@ export class GameCore {
             bulletPool: this.bulletPool,
             explosionPool: this.explosionPool,
         };
+        const frame = this._perfAcc.frame;
         for (const enemy of this.waves.enemies) {
-            enemy.update(aiCtx);
+            const distSq = this.player.position.distanceToSquared(enemy.position);
+            const far = distSq > aiFarDist * aiFarDist;
+            if (far && aiSkip > 0 && (frame + (enemy.mesh?.id ?? 0)) % (aiSkip + 1) !== 0) {
+                // 遠距敵機隔幀略過完整 AI，沿上一幀速度滑行
+                const vel = enemy.ai?.velocity;
+                if (vel) enemy.mesh.position.addScaledVector(vel, dt);
+            } else {
+                enemy.update(aiCtx);
+            }
             if (this.player.position.distanceTo(enemy.position) < this.config.player.collision_radius) {
                 if (this.runMods.collisionImmune) continue;
                 const ram = enemy.tryRamDamage?.(dt) ?? 0;
@@ -1266,32 +1346,39 @@ export class GameCore {
         this.route.update(dt);
         this._updateRoute();
 
-        this.ambientBoomT -= dt;
-        if (this.ambientBoomT <= 0) {
-            this.ambientBoomT = 8 + Math.random() * 12;
-            this.spawnExplosion(
-                this.player.position.clone().add(new THREE.Vector3(
-                    (Math.random() - 0.5) * 600,
-                    40 + Math.random() * 80,
-                    -200 - Math.random() * 400
-                )),
-                0.55 + Math.random() * 0.4
-            );
+        if (perf.ambient_boom_enabled !== false) {
+            this.ambientBoomT -= dt;
+            if (this.ambientBoomT <= 0) {
+                this.ambientBoomT = 10 + Math.random() * 14;
+                this.spawnExplosion(
+                    this.player.position.clone().add(new THREE.Vector3(
+                        (Math.random() - 0.5) * 600,
+                        40 + Math.random() * 80,
+                        -200 - Math.random() * 400
+                    )),
+                    0.55 + Math.random() * 0.4
+                );
+            }
         }
 
         this._updateCombatBuff(dt);
 
-        const metaShieldCap = Math.max(
-            1,
-            (this.config.meta?.upgrades?.shield?.shield_per_level ?? 18)
-                * (this.config.meta?.upgrades?.shield?.max_level ?? 5)
-        );
-        const shieldPct = (this.player.shield / metaShieldCap) * 100;
-        this.hud.setBars(
-            (this.player.hp / this.player.maxHp) * 100,
-            shieldPct,
-            { combatBuff: this.combatBuffT > 0 }
-        );
+        this._perfAcc.hudBars += dt;
+        const barsPeriod = 1 / Math.max(1, perf.hud_bars_hz ?? 15);
+        if (this._perfAcc.hudBars >= barsPeriod) {
+            this._perfAcc.hudBars = 0;
+            const metaShieldCap = Math.max(
+                1,
+                (this.config.meta?.upgrades?.shield?.shield_per_level ?? 18)
+                    * (this.config.meta?.upgrades?.shield?.max_level ?? 5)
+            );
+            const shieldPct = (this.player.shield / metaShieldCap) * 100;
+            this.hud.setBars(
+                (this.player.hp / this.player.maxHp) * 100,
+                shieldPct,
+                { combatBuff: this.combatBuffT > 0 }
+            );
+        }
 
         if (this.player.hp <= 0) {
             this.spawnExplosion(this.player.position.clone(), 2.2);
@@ -1300,19 +1387,30 @@ export class GameCore {
             return;
         }
 
-        const radarContacts = this.boss?.alive
-            ? [...this.waves.enemies, this.boss]
-            : this.waves.enemies;
-        this.radar.update(dt, this.player.root, radarContacts, this.route.waypoints, this.items);
+        this._perfAcc.radar += dt;
+        const radarPeriod = 1 / Math.max(1, perf.radar_hz ?? 12);
+        if (this._perfAcc.radar >= radarPeriod) {
+            this._perfAcc.radar = 0;
+            const radarContacts = this.boss?.alive
+                ? [...this.waves.enemies, this.boss]
+                : this.waves.enemies;
+            this.radar.update(radarPeriod, this.player.root, radarContacts, this.route.waypoints, this.items);
+        }
         this.updateCompass();
-        const bossHud = this.boss?.alive ? this.boss.getHudTargets() : [];
-        this.worldHud.update(
-            this.waves.enemies,
-            this.route.waypoints,
-            this.player.position,
-            this.lockSnap,
-            bossHud
-        );
+
+        this._perfAcc.worldHud += dt;
+        const whPeriod = 1 / Math.max(1, perf.world_hud_hz ?? 20);
+        if (this._perfAcc.worldHud >= whPeriod) {
+            this._perfAcc.worldHud = 0;
+            const bossHud = this.boss?.alive ? this.boss.getHudTargets() : [];
+            this.worldHud.update(
+                this.waves.enemies,
+                this.route.waypoints,
+                this.player.position,
+                this.lockSnap,
+                bossHud
+            );
+        }
 
         this._render();
     }
