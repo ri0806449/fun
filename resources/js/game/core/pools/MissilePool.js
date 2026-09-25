@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { ObjectPool } from './ObjectPool.js';
+import { createMissileHeatAnchor } from '../../fx/HeatHaze.js';
 
 /**
  * 飛彈池。userData.target 指向 EnemyJet（需具備 alive / position），
@@ -20,6 +21,8 @@ export class MissilePool extends ObjectPool {
             });
             const mesh = new THREE.Mesh(geo, mat);
             mesh.rotation.x = Math.PI / 2;
+            const heat = createMissileHeatAnchor({ strength: 0.85, radius: 0.05 });
+            mesh.add(heat);
             mesh.userData = {
                 alive: false,
                 velocity: new THREE.Vector3(),
@@ -33,6 +36,7 @@ export class MissilePool extends ObjectPool {
                 confused: 0,
                 owner: null,
                 damage: defaults.damage ?? 1,
+                heatAnchor: heat,
             };
             return mesh;
         });
@@ -57,6 +61,9 @@ export class MissilePool extends ObjectPool {
         ud.confused = 0;
         ud.owner = opts.owner || null;
         ud.damage = opts.damage ?? this.defaults.damage ?? 1;
+        if (ud.heatAnchor) {
+            ud.heatAnchor.userData._heatIntensity = 0.9;
+        }
         this.active.push(mesh);
         return mesh;
     }
@@ -65,6 +72,9 @@ export class MissilePool extends ObjectPool {
         if (!mesh.userData.alive) return;
         mesh.userData.target = null;
         mesh.userData.guided = false;
+        if (mesh.userData.heatAnchor) {
+            mesh.userData.heatAnchor.userData._heatIntensity = 0;
+        }
         super.release(mesh);
     }
 }

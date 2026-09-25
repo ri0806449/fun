@@ -19,7 +19,11 @@ export const SUN_LIGHT_MAX = 1.05;
 export const AMBIENT_INTENSITY_MIN = 0.12;
 export const AMBIENT_INTENSITY_MAX = 0.85;
 export const EXPOSURE_MIN = 0.45;
-export const EXPOSURE_MAX = 1.2;
+/**
+ * ACES Filmic 目標曝光約 1.2；上限留餘裕避免天氣／grade 再推高時被硬夾回洗白前一刻。
+ * 真正防洗白仍靠 fog／sun／bloom threshold／此夾制分層，而非把目標壓暗。
+ */
+export const EXPOSURE_MAX = 1.45;
 export const GRADE_EXPOSURE_MIN = 0.45;
 export const GRADE_EXPOSURE_MAX = 1.25;
 /** 天氣對日照的額外倍率下限（勿再與仰角係數雙重壓暗） */

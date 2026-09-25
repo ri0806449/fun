@@ -396,7 +396,13 @@ return [
     ],
 
     'visual' => [
-        'tone_mapping_exposure' => 0.85,
+        /*
+        | 品質檔：low／medium 預設關 SSAO／DoF；high 開。
+        | 個別 ssao_enabled／dof_enabled／heat_haze_enabled 可覆寫（null=跟品質檔）。
+        */
+        'quality' => 'medium',
+        // ACES Filmic 目標曝光（atmosphereLimits EXPOSURE_MAX=1.45 留餘裕）
+        'tone_mapping_exposure' => 1.2,
         'env_intensity' => 0.45,
         'bloom_enabled' => true,
         'bloom_strength' => 0.22,
@@ -408,10 +414,23 @@ return [
         'film_intensity' => 0.12,
         'ca_max' => 1.0,
         'boost_blur' => 1.0,
+        /** 加力時削弱 DoF／grade blur（1=加力主體清晰） */
+        'boost_clarity' => 1.0,
         'motion_blur' => 0.55,
         'radial_blur' => 0.75,
         'force_hdr' => false,
         'composer_enabled' => true,
+        'ssao_enabled' => null,
+        'ssao_kernel_size' => 16,
+        'ssao_kernel_radius' => 8,
+        'ssao_min_distance' => 0.004,
+        'ssao_max_distance' => 0.12,
+        'dof_enabled' => null,
+        'dof_aperture' => 0.00012,
+        'dof_maxblur' => 0.0035,
+        'heat_haze_enabled' => false,
+        'heat_haze_intensity' => 1.0,
+        'heat_haze_max_sources' => 8,
         'contrail_capacity' => 40,
         'contrail_g_threshold' => 2.35,
         'contrail_interval' => 0.08,
@@ -427,7 +446,8 @@ return [
 
     /*
     | 幀率降載（前端 GameCore 讀取）。
-    | flight_* 僅在 PLAYING 套用；不影響 PostFx 安全預設（grade／HDR 仍關閉）。
+    | flight_* 僅在 PLAYING 套用；grade／HDR 仍關閉。
+    | 飛行中預設關 SSAO／DoF；HeatShimmer 可留；stride 可再降頻。
     | 戰鬥／盤旋另以 lock／雲 stride／爆炸燈／音效層數壓 CPU／GPU。
     */
     'performance' => [
@@ -442,6 +462,10 @@ return [
         'ai_far_distance' => 400,
         'max_simultaneous_booms' => 3,
         'ambient_boom_enabled' => false,
+        'flight_ssao' => false,
+        'flight_dof' => false,
+        'flight_heat_shimmer' => true,
+        'flight_postfx_stride' => 2,
         'flight_max_pixel_ratio' => 1.1,
         'flight_water_reflection_interval' => 0,
         'flight_cloud_update_stride' => 5,
@@ -495,32 +519,46 @@ return [
             'look_x' => -0.5,
             'look_y' => -0.5,
             'look_z' => -32,
-            'stiffness' => 42,
-            'damping' => 10.5,
-            'look_stiffness' => 26,
-            'look_damping' => 8.2,
-            'boost_pull_z' => 6.5,
-            'boost_pull_y' => 1.1,
-            'boost_pull_approach' => 2.6,
-            'look_ahead_roll' => 9.5,
-            'look_ahead_pitch' => 7.5,
+            'stiffness' => 55,
+            'damping' => 13,
+            // 視線略軟於位置，但仍夠緊
+            'look_stiffness' => 40,
+            'look_damping' => 11,
+            // 朝向跟隨（大轉彎時邏輯內再動態加快）
+            'look_orient_rate' => 16,
+            // 大角速度時 stiffness 加成上限倍率
+            'turn_track_boost' => 0.95,
+            'max_pos_lag' => 4.2,
+            'max_look_lag' => 5.5,
+            'boost_pull_z' => 5.2,
+            'boost_pull_y' => 0.85,
+            'boost_pull_approach' => 3.4,
+            'look_ahead_roll' => 7.5,
+            'look_ahead_pitch' => 6,
             'fov_approach' => 9,
-            'shake_decay' => 0.028,
-            'shake_pos_mul' => 2.4,
-            'shake_rot_mul' => 0.045,
+            'shake_decay' => 0.032,
+            'shake_pos_mul' => 3.2,
+            'shake_rot_mul' => 0.065,
             'turbulence_low_alt_ceil' => 28,
-            'turbulence_low_alt_amp' => 0.022,
-            'turbulence_speed_amp' => 0.014,
-            'turbulence_cloud_amp' => 0.03,
+            'turbulence_low_alt_amp' => 0.034,
+            'turbulence_speed_amp' => 0.022,
+            'turbulence_cloud_amp' => 0.042,
             'turbulence_boost_amp' => 0.012,
-            'turbulence_freq' => 3.8,
-            'aileron_max_rad' => 0.42,
-            'elevator_max_rad' => 0.38,
-            'surface_lerp' => 10,
-            'nozzle_boost_scale' => 1.35,
-            'body_turbulence_amp' => 0.055,
+            'turbulence_freq' => 4.4,
+            'aileron_max_rad' => 0.55,
+            'elevator_max_rad' => 0.48,
+            'surface_lerp' => 11,
+            'nozzle_boost_scale' => 1.55,
+            'body_turbulence_amp' => 0.085,
             'body_turbulence_low_alt_ceil' => 28,
-            'body_turbulence_freq' => 5.2,
+            'body_turbulence_freq' => 5.8,
+            // 近爆距離加權／擦彈／近掠敵機 shake
+            'near_boom_radius' => 55,
+            'near_boom_shake_mul' => 2.2,
+            'graze_radius' => 9,
+            'graze_shake' => 0.68,
+            'graze_cooldown' => 0.28,
+            'close_call_shake' => 0.42,
         ],
     ],
 

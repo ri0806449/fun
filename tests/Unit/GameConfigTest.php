@@ -39,12 +39,17 @@ class GameConfigTest extends TestCase
             'flight_orbit_yaw_threshold', 'flight_orbit_cloud_stride_boost',
             'flight_distant_craft_stride', 'flight_cloud_far_skip_mul',
             'combat_boom_particle_count', 'combat_max_trail_particles',
+            'flight_ssao', 'flight_dof', 'flight_heat_shimmer', 'flight_postfx_stride',
         ] as $key) {
             $this->assertArrayHasKey($key, $perf, "缺少 performance.{$key}");
         }
 
         $this->assertFalse($perf['ambient_boom_enabled']);
         $this->assertFalse($perf['flight_explosion_lights']);
+        $this->assertFalse($perf['flight_ssao']);
+        $this->assertFalse($perf['flight_dof']);
+        $this->assertTrue($perf['flight_heat_shimmer']);
+        $this->assertGreaterThanOrEqual(1, (int) $perf['flight_postfx_stride']);
         $this->assertSame(0, (int) $perf['flight_water_reflection_interval']);
         // 飛行 DPR 上限不得高於選單／展示上限
         $this->assertLessThanOrEqual(
@@ -223,9 +228,16 @@ class GameConfigTest extends TestCase
         $this->assertArrayHasKey('boost_blur', $visual);
         $this->assertArrayHasKey('motion_blur', $visual);
         $this->assertArrayHasKey('radial_blur', $visual);
+        $this->assertArrayHasKey('quality', $visual);
+        $this->assertArrayHasKey('ssao_enabled', $visual);
+        $this->assertArrayHasKey('dof_enabled', $visual);
+        $this->assertArrayHasKey('heat_haze_enabled', $visual);
+        $this->assertContains($visual['quality'], ['low', 'medium', 'high']);
+        $this->assertFalse($visual['heat_haze_enabled'], '預設關 HeatShimmer blit，避免 WebKit 初編譯整屏黑；quality=high 或顯式 true 再開');
         $this->assertGreaterThan(0.4, $visual['tone_mapping_exposure'], '曝光過低會在部分 GPU 上接近全黑');
-        $this->assertGreaterThanOrEqual(0.7, $visual['tone_mapping_exposure'], '預設曝光應足以應付黃昏／雨霧疊加');
-        $this->assertLessThanOrEqual(1.2, $visual['tone_mapping_exposure']);
+        $this->assertGreaterThanOrEqual(1.0, $visual['tone_mapping_exposure'], 'ACES 目標曝光應接近 1.2');
+        $this->assertEqualsWithDelta(1.2, (float) $visual['tone_mapping_exposure'], 0.05);
+        $this->assertLessThanOrEqual(1.45, $visual['tone_mapping_exposure']);
         $this->assertLessThan(0.35, $visual['bloom_strength']);
         $this->assertGreaterThanOrEqual(0.9, $visual['bloom_threshold']);
     }
@@ -241,12 +253,15 @@ class GameConfigTest extends TestCase
         $cam = $hud['camera'];
         foreach ([
             'boost_fov', 'stiffness', 'damping', 'look_stiffness', 'look_damping',
+            'look_orient_rate', 'turn_track_boost', 'max_pos_lag', 'max_look_lag',
             'boost_pull_z', 'boost_pull_y', 'look_ahead_roll', 'look_ahead_pitch',
             'fov_approach', 'shake_decay', 'shake_pos_mul', 'shake_rot_mul',
             'turbulence_low_alt_ceil', 'turbulence_low_alt_amp', 'turbulence_speed_amp',
             'turbulence_cloud_amp', 'turbulence_boost_amp', 'turbulence_freq',
             'aileron_max_rad', 'elevator_max_rad', 'surface_lerp', 'nozzle_boost_scale',
             'body_turbulence_amp', 'body_turbulence_low_alt_ceil', 'body_turbulence_freq',
+            'near_boom_radius', 'near_boom_shake_mul', 'graze_radius', 'graze_shake',
+            'graze_cooldown', 'close_call_shake',
         ] as $key) {
             $this->assertArrayHasKey($key, $cam, "缺少 hud.camera.{$key}");
         }
@@ -254,10 +269,21 @@ class GameConfigTest extends TestCase
         $this->assertSame(80.0, (float) $cam['boost_fov']);
         $this->assertGreaterThan(0, $cam['stiffness']);
         $this->assertGreaterThan(0, $cam['damping']);
-        $this->assertGreaterThan($cam['look_damping'], $cam['look_stiffness']);
+        // 視線點彈簧略軟於位置，但仍夠緊以免大轉跟丟
+        $this->assertLessThan($cam['stiffness'], $cam['look_stiffness']);
+        $this->assertGreaterThan(0, $cam['look_damping']);
+        $this->assertGreaterThanOrEqual(10.0, (float) $cam['look_orient_rate']);
+        $this->assertLessThan(28.0, (float) $cam['look_orient_rate']);
+        $this->assertGreaterThan(0.5, (float) $cam['turn_track_boost']);
+        $this->assertLessThan(7.0, (float) $cam['max_pos_lag']);
         $this->assertGreaterThan(0, $cam['aileron_max_rad']);
         $this->assertGreaterThan(0, $cam['elevator_max_rad']);
         $this->assertGreaterThan(1.0, (float) $cam['nozzle_boost_scale']);
+        $this->assertGreaterThan(0, (float) $cam['graze_radius']);
+        $this->assertGreaterThan(0, (float) $cam['graze_shake']);
+        $this->assertGreaterThan(0, (float) $cam['near_boom_radius']);
+        $this->assertArrayHasKey('boost_clarity', $this->config()['visual']);
+        $this->assertGreaterThanOrEqual(0.8, (float) $this->config()['visual']['boost_clarity']);
     }
 
     public function test_stall_speed_is_below_cruise_speed(): void

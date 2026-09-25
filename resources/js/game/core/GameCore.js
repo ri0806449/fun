@@ -38,6 +38,11 @@ import { WeatherSystem } from '../world/WeatherSystem.js';
 import { StuntScoring } from '../scoring/StuntScoring.js';
 import { clampToneMappingExposure, cameraFarForSky } from '../world/atmosphereLimits.js';
 import { createWebGLRenderer, disposeContainerCanvases } from '../utils/createWebGLRenderer.js';
+import {
+    clearHeatSlots,
+    projectHeatSources,
+    MAX_HEAT_SOURCES,
+} from '../fx/HeatHaze.js';
 
 /**
  * GameCore — 組裝場景、實體、HUD 與主迴圈，並持有遊戲狀態。
@@ -71,7 +76,8 @@ export class GameCore {
         this.groundDefense = new GroundDefense(this.scene, this.terrain, config.ground_defense ?? {});
         this.postFx = new PostFx(
             this.renderer, this.scene, this.camera, innerWidth, innerHeight,
-            config.visual ?? {}
+            config.visual ?? {},
+            config.performance ?? {}
         );
         this.contrails = new ContrailSystem(this.scene, {
             capacity: config.visual?.contrail_capacity ?? 64,
@@ -164,6 +170,7 @@ export class GameCore {
         this.trailAcc = 0;
         this.foamAcc = 0;
         this.ambientBoomT = 8;
+        this._grazeCd = 0;
         this.outcome = null;
         this.pilotName = 'PILOT';
         this._scoreSubmitted = false;
@@ -205,6 +212,10 @@ export class GameCore {
         this._lockTargets = [];
         this._radarContacts = [];
         this._cloudDensCache = 0;
+        this._heatSlots = Array.from(
+            { length: MAX_HEAT_SOURCES },
+            () => new THREE.Vector4(0, 0, 0, 0.08)
+        );
         this._baseBoomParticles = config.pools?.boom_particle_count ?? 8;
         this._baseMaxTrail = config.pools?.max_trail_particles ?? 56;
         this._baseCloudStride = 1;
@@ -251,7 +262,7 @@ export class GameCore {
         this.renderer.setPixelRatio(Math.min(devicePixelRatio, maxPr));
         this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
         this.renderer.toneMappingExposure = clampToneMappingExposure(
-            this.config.visual?.tone_mapping_exposure ?? 0.5
+            this.config.visual?.tone_mapping_exposure ?? 1.2
         );
         this.renderer.outputColorSpace = THREE.SRGBColorSpace;
         this.container.appendChild(this.renderer.domElement);
@@ -355,6 +366,7 @@ export class GameCore {
                 this._perfAcc.fog = 0;
                 this._perfAcc.lock = 0;
             }
+            this.postFx?.setFlightLoadShed(true);
         } else {
             this.renderer.setPixelRatio(this._basePixelRatio);
             this.water.setReflectionInterval(
@@ -376,6 +388,7 @@ export class GameCore {
             this.explosionPool.boomParticleCount = this._baseBoomParticles;
             this.explosionPool.maxTrailParticles = this._baseMaxTrail;
             this.contrails.setSpawnIntervalMul(1);
+            this.postFx?.setFlightLoadShed(false);
         }
     }
 
@@ -707,19 +720,33 @@ export class GameCore {
 
     spawnExplosion(pos, scale = 1) {
         const maxBooms = this.config.performance?.max_simultaneous_booms ?? 4;
+        const camCfg = this.config.hud?.camera ?? {};
+        // 以玩家距離為主（相機彈簧滯後時仍要「近爆猛震」）
+        const distCam = pos.distanceTo(this.camera.position);
+        const distPlayer = this.player ? pos.distanceTo(this.player.position) : distCam;
+        const dist = Math.min(distCam, distPlayer);
+        const nearR = camCfg.near_boom_radius ?? 55;
+        const nearMul = camCfg.near_boom_shake_mul ?? 2.2;
+        let distMul = 0.2;
+        if (dist < nearR) {
+            distMul = 1 + (1 - dist / nearR) * nearMul;
+        } else if (dist < nearR * 3.5) {
+            distMul = Math.max(0.2, 1 - (dist - nearR) / (nearR * 2.5));
+        }
+        const shakeAmt = 0.55 * scale * distMul;
+
         if (scale < 1.5 && this._activeBoomBudget >= maxBooms) {
             // 小爆炸超預算：只播音＋輕震，略過粒子
             this.audio.boom(scale * 0.7, pos);
-            this.cameraRig.addShake(0.28 * scale);
+            this.cameraRig.addShake(shakeAmt * 0.55);
             return;
         }
         this._activeBoomBudget += 1;
         this.audio.boom(scale, pos);
-        this.cameraRig.addShake(0.48 * scale);
+        this.cameraRig.addShake(shakeAmt);
         this.explosionPool.spawnBoom(pos, scale);
-        const dist = pos.distanceTo(this.camera.position);
-        if (dist < 90) {
-            this.postFx.pulseChromatic(Math.min(1, (1 - dist / 90) * scale * 0.85));
+        if (distCam < 90) {
+            this.postFx.pulseChromatic(Math.min(1, (1 - distCam / 90) * scale * 0.85));
         }
     }
 
@@ -916,6 +943,7 @@ export class GameCore {
     _updateBullets(dt) {
         const playerHitR = this.config.player.hit_radius;
         const enemyHitR = this.config.weapons.gun.hit_radius;
+        if (this._grazeCd > 0) this._grazeCd = Math.max(0, this._grazeCd - dt);
 
         for (let i = this.bulletPool.active.length - 1; i >= 0; i--) {
             const b = this.bulletPool.active[i];
@@ -943,10 +971,20 @@ export class GameCore {
                     }
                 }
             } else if (!dead && (ud.team === 'enemy' || ud.team === 'aaa')) {
-                if (b.position.distanceTo(this.player.position) < playerHitR) {
+                const dist = b.position.distanceTo(this.player.position);
+                if (dist < playerHitR) {
                     this.player.takeDamage(ud.damage);
                     this.spawnExplosion(b.position.clone(), 0.25);
                     dead = true;
+                } else {
+                    // 擦彈：未命中但貼身掠過 → 強烈 Camera Shake
+                    const camCfg = this.config.hud?.camera ?? {};
+                    const grazeR = camCfg.graze_radius ?? 9;
+                    if (dist < grazeR && this._grazeCd <= 0) {
+                        const gShake = camCfg.graze_shake ?? 0.68;
+                        this.cameraRig.addShake(gShake * (1 - dist / grazeR));
+                        this._grazeCd = camCfg.graze_cooldown ?? 0.28;
+                    }
                 }
             }
 
@@ -1408,7 +1446,11 @@ export class GameCore {
         }) ?? { scoreDelta: 0, lowAltActive: false, closeCall: false, windBoost: 0, foamBoost: 1, multiplier: 1 };
         if (stunt.scoreDelta > 0) this.addScore(stunt.scoreDelta);
         if (stunt.lowAltActive) this.radio?.noteLowAlt();
-        if (stunt.closeCall) this.radio?.trigger('close_call');
+        if (stunt.closeCall) {
+            this.radio?.trigger('close_call');
+            const ccShake = this.config.hud?.camera?.close_call_shake ?? 0.42;
+            this.cameraRig.addShake(ccShake);
+        }
         this.hud.setStuntBanner?.(stunt.lowAltActive, stunt.multiplier ?? 2);
         if (stunt.lowAltActive && stunt.foamBoost > 1) {
             this.foamAcc += dt * (stunt.foamBoost - 1);
@@ -1656,7 +1698,62 @@ export class GameCore {
         this._render();
     }
 
+    /**
+     * DoF 對焦玩家＋熱氣來源投影（噴口／飛彈尾）。
+     * 在相機更新之後、composer.render 之前呼叫。
+     * @param {number} [time=0]
+     */
+    _updatePostFxOptics(time = 0) {
+        if (!this.postFx) return;
+
+        const flying = this.state === GameState.PLAYING;
+        const focusDist = this.camera.position.distanceTo(this.player.position);
+        const closeness = Math.max(0, Math.min(1, (12 - focusDist) / 8));
+        const boosting = flying && !!this.player?.boosting;
+        // 對焦鎖玩家機距離；加力時 boostClarity→1 關閉／大幅減弱 DoF
+        this.postFx.setFocusDistance(
+            focusDist,
+            flying ? closeness : Math.min(0.25, closeness),
+            { boostClarity: boosting ? 1 : 0 }
+        );
+        if (this.postFx.heatPass && boosting) {
+            // 加力時略降熱氣折射，避免噴口扭曲蓋過機體輪廓
+            const base = this.postFx.flags?.heatIntensity ?? 1;
+            this.postFx.heatPass.uniforms.uScale.value = base * 0.55;
+        } else if (this.postFx.heatPass && this.postFx.flags?.heat) {
+            this.postFx.heatPass.uniforms.uScale.value = this.postFx.flags.heatIntensity;
+        }
+
+        if (!this.postFx.flags?.heat) {
+            return;
+        }
+
+        clearHeatSlots(this._heatSlots);
+        let n = 0;
+        if (this.player?.mesh) {
+            n = projectHeatSources(
+                this.player.mesh,
+                this.camera,
+                this._heatSlots,
+                this.config.visual?.heat_haze_intensity ?? 1
+            );
+        }
+        const missiles = this.missilePool?.active;
+        if (missiles) {
+            for (let i = 0; i < missiles.length && n < this._heatSlots.length; i++) {
+                const m = missiles[i];
+                const anchor = m.userData?.heatAnchor;
+                if (!anchor || !m.userData?.alive) continue;
+                anchor.userData._heatIntensity = 0.85 + Math.sin(time * 18 + i) * 0.08;
+                // slice 分享同一組 Vector4，寫入 [0] 即 heatSlots[n]
+                n += projectHeatSources(m, this.camera, this._heatSlots.slice(n), 1);
+            }
+        }
+        this.postFx.setHeatSlots(this._heatSlots);
+    }
+
     _render() {
+        this._updatePostFxOptics(this.elapsed ?? 0);
         this.water.renderReflection(this.renderer, this.camera);
         this.postFx.render();
     }
