@@ -29,13 +29,13 @@ export class PlayerJet {
         this.boostKick = config.flight.boost_speed_kick;
 
         const cam = config.hud?.camera ?? {};
-        this.aileronMax = cam.aileron_max_rad ?? 0.42;
-        this.elevatorMax = cam.elevator_max_rad ?? 0.38;
-        this.surfaceLerp = cam.surface_lerp ?? 10;
-        this.nozzleBoostScale = cam.nozzle_boost_scale ?? 1.35;
-        this.bodyTurbAmp = cam.body_turbulence_amp ?? 0.055;
+        this.aileronMax = cam.aileron_max_rad ?? 0.55;
+        this.elevatorMax = cam.elevator_max_rad ?? 0.48;
+        this.surfaceLerp = cam.surface_lerp ?? 11;
+        this.nozzleBoostScale = cam.nozzle_boost_scale ?? 1.55;
+        this.bodyTurbAmp = cam.body_turbulence_amp ?? 0.085;
         this.bodyTurbLowAlt = cam.body_turbulence_low_alt_ceil ?? 28;
-        this.bodyTurbFreq = cam.body_turbulence_freq ?? 5.2;
+        this.bodyTurbFreq = cam.body_turbulence_freq ?? 5.8;
 
         this.root = new THREE.Group();
         this.root.position.copy(this.startPos);
