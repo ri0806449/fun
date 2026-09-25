@@ -33,8 +33,12 @@ void main(){
 /**
  * 引擎噴口熱扭曲／體積光柱平面（加性 shader）。
  * 由 PlayerJet 在加力或高油門時提高 intensity。
+ * @param {{ span?: number, y?: number, z?: number }} [opts]
  */
-export function createHeatHazePlanes() {
+export function createHeatHazePlanes(opts = {}) {
+    const span = opts.span ?? 0.48;
+    const y = opts.y ?? -0.18;
+    const z = opts.z ?? 4.2;
     const geo = new THREE.PlaneGeometry(1.1, 2.4, 1, 1);
     const planes = [];
 
@@ -52,7 +56,7 @@ export function createHeatHazePlanes() {
             side: THREE.DoubleSide,
         });
         const mesh = new THREE.Mesh(geo, mat);
-        mesh.position.set(side * 0.48, -0.18, 4.2);
+        mesh.position.set(side * span, y, z);
         mesh.rotation.y = Math.PI;
         mesh.userData.isHeatHaze = true;
         mesh.renderOrder = 3;
