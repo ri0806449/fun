@@ -5,24 +5,40 @@
  */
 import * as THREE from 'three';
 
-/** @typedef {'engine'|'afterburner'|'wind'|'enemyEngine'|'gun'|'missile'|'missileWhoosh'|'boom'|'boomLow'|'boost'|'sonicBoom'|'hit'|'pickup'|'scrap'|'waypoint'|'levelUp'|'achievement'|'lockTick'|'lockTone'|'lockAcquired'|'radarBeep'|'radarSolid'|'overheat'|'foxTwo'|'terrainPullUp'|'missileAlert'|'boss'} AudioKey */
+/** @typedef {'engine'|'afterburner'|'wind'|'enemyEngine'|'gun'|'missile'|'missileWhoosh'|'boom'|'boomLow'|'boomMid'|'boomFar'|'boost'|'sonicBoom'|'hit'|'pickup'|'scrap'|'waypoint'|'levelUp'|'achievement'|'lockTick'|'lockTone'|'lockAcquired'|'radarBeep'|'radarSolid'|'overheat'|'foxTwo'|'terrainPullUp'|'missileAlert'|'boss'|'radioStatic'} AudioKey */
 
 const ASSET_BASE = '/audio';
 
-/** 優先 .ogg，再 .mp3／.wav（瀏覽器相容備援）。 */
+/**
+ * 攻擊／引擎優先厚重 wav／真實噴射感；舊 Kenney 科幻 ogg 僅作最後備援。
+ */
 const MANIFEST = Object.freeze({
-    engine: [`${ASSET_BASE}/engine/jet_loop.ogg`, `${ASSET_BASE}/engine/jet_loop.mp3`],
-    afterburner: [`${ASSET_BASE}/engine/afterburner.ogg`, `${ASSET_BASE}/engine/afterburner.mp3`],
+    engine: [
+        `${ASSET_BASE}/engine/jet_loop.wav`,
+        `${ASSET_BASE}/engine/jet_loop.mp3`,
+        `${ASSET_BASE}/engine/jet_loop.ogg`,
+    ],
+    afterburner: [
+        `${ASSET_BASE}/engine/afterburner.wav`,
+        `${ASSET_BASE}/engine/afterburner.mp3`,
+        `${ASSET_BASE}/engine/afterburner.ogg`,
+    ],
     wind: [`${ASSET_BASE}/engine/wind_loop.mp3`, `${ASSET_BASE}/engine/wind_loop.ogg`],
-    enemyEngine: [`${ASSET_BASE}/engine/enemy_engine.ogg`, `${ASSET_BASE}/engine/enemy_engine.mp3`],
-    gun: [`${ASSET_BASE}/sfx/gun.ogg`],
-    missile: [`${ASSET_BASE}/sfx/missile_launch.ogg`],
+    enemyEngine: [
+        `${ASSET_BASE}/engine/enemy_engine.wav`,
+        `${ASSET_BASE}/engine/enemy_engine.mp3`,
+        `${ASSET_BASE}/engine/enemy_engine.ogg`,
+    ],
+    gun: [`${ASSET_BASE}/sfx/gun.wav`, `${ASSET_BASE}/sfx/gun.ogg`],
+    missile: [`${ASSET_BASE}/sfx/missile_launch.wav`, `${ASSET_BASE}/sfx/missile_launch.ogg`],
     missileWhoosh: [`${ASSET_BASE}/sfx/missile_whoosh.ogg`],
-    boom: [`${ASSET_BASE}/sfx/explosion.ogg`],
-    boomLow: [`${ASSET_BASE}/sfx/explosion_low.ogg`],
+    boom: [`${ASSET_BASE}/sfx/explosion.wav`, `${ASSET_BASE}/sfx/explosion.ogg`],
+    boomLow: [`${ASSET_BASE}/sfx/explosion_low.wav`, `${ASSET_BASE}/sfx/explosion_low.ogg`],
+    boomMid: [`${ASSET_BASE}/sfx/explosion_mid.wav`],
+    boomFar: [`${ASSET_BASE}/sfx/explosion_far.wav`],
     boost: [`${ASSET_BASE}/sfx/boost.ogg`],
     sonicBoom: [`${ASSET_BASE}/sfx/sonic_boom.mp3`],
-    hit: [`${ASSET_BASE}/sfx/hit.ogg`],
+    hit: [`${ASSET_BASE}/sfx/hit.wav`, `${ASSET_BASE}/sfx/hit.ogg`],
     pickup: [`${ASSET_BASE}/sfx/pickup.ogg`],
     scrap: [`${ASSET_BASE}/sfx/pickup.ogg`],
     waypoint: [`${ASSET_BASE}/sfx/waypoint.ogg`],
@@ -33,42 +49,45 @@ const MANIFEST = Object.freeze({
     lockAcquired: [`${ASSET_BASE}/sfx/lock_acquired.wav`],
     radarBeep: [`${ASSET_BASE}/sfx/radar_beep.wav`],
     radarSolid: [`${ASSET_BASE}/sfx/radar_lock_solid.wav`],
-    overheat: [`${ASSET_BASE}/sfx/hit.ogg`],
+    overheat: [`${ASSET_BASE}/sfx/hit.wav`, `${ASSET_BASE}/sfx/hit.ogg`],
     foxTwo: [`${ASSET_BASE}/voice/fox_two.wav`],
     terrainPullUp: [`${ASSET_BASE}/voice/terrain_pull_up.wav`],
     missileAlert: [`${ASSET_BASE}/voice/missile_alert.wav`],
     boss: [`${ASSET_BASE}/music/boss_loop.ogg`],
+    radioStatic: [`${ASSET_BASE}/sfx/radio_static.wav`],
 });
 
 const DEFAULT_AUDIO_CFG = Object.freeze({
     master_volume: 0.62,
     sfx_volume: 1.45,
     voice_volume: 1.4,
-    engine_volume: 0.36,
-    wind_volume: 0.3,
+    engine_volume: 0.44,
+    wind_volume: 0.22,
     music_volume: 0.5,
     doppler_factor: 0.85,
     max_distance: 480,
     ref_distance: 28,
     rolloff: 1.15,
-    max_positional: 18,
+    max_positional: 22,
     positional_cull_distance: 520,
-    engine_throttle_exp: 1.55,
-    engine_speed_exp: 1.35,
-    engine_pitch_min: 0.72,
-    engine_pitch_max: 1.55,
-    wind_pitch_min: 0.7,
-    wind_pitch_max: 1.85,
-    afterburner_volume: 0.44,
+    engine_throttle_exp: 1.15,
+    engine_speed_exp: 1.1,
+    engine_pitch_min: 0.88,
+    engine_pitch_max: 1.18,
+    wind_pitch_min: 0.85,
+    wind_pitch_max: 1.55,
+    afterburner_volume: 0.58,
     threat_beep_min_interval: 0.55,
     threat_beep_max_interval: 0.09,
     pull_up_voice_cooldown: 2.4,
     fox_two_cooldown: 0.35,
-    gun_volume: 0.82,
-    missile_volume: 0.92,
-    missile_whoosh_volume: 0.55,
-    boom_volume: 1.05,
-    hit_volume: 0.78,
+    gun_volume: 1.05,
+    missile_volume: 1.08,
+    missile_whoosh_volume: 0.62,
+    boom_volume: 1.28,
+    boom_near_distance: 58,
+    boom_chest_gain: 1.4,
+    hit_volume: 0.98,
     lock_tick_volume: 0.45,
     lock_tone_volume: 0.72,
     lock_acquired_volume: 0.58,
@@ -76,7 +95,11 @@ const DEFAULT_AUDIO_CFG = Object.freeze({
     radar_beep_volume: 0.58,
     radar_solid_volume: 0.7,
     sfx_compress: true,
-    sfx_makeup_gain: 1.28,
+    sfx_makeup_gain: 1.32,
+    sfx_lowshelf_hz: 130,
+    sfx_lowshelf_gain_db: 5.5,
+    attack_lowshelf: true,
+    radio_volume: 0.72,
 });
 
 /**
@@ -86,6 +109,8 @@ class ProceduralFallback {
     constructor() {
         this.ctx = null;
         this.master = null;
+        this._jetSrc = null;
+        this._jetGain = null;
     }
 
     bind(ctx, master) {
@@ -134,6 +159,59 @@ class ProceduralFallback {
         f.connect(g);
         g.connect(this.master);
         src.start();
+    }
+
+    /** 低頻噴射 rumble（非高轉速鋸齒／汽車感）。 */
+    jetRumble(dur = 0.35, vol = 0.22) {
+        this.noiseBurst(dur, vol * 0.85, 90, 0.55);
+        this.noiseBurst(dur * 0.7, vol * 0.35, 2400, 0.8);
+        this.beep(48, dur * 0.9, 'sine', vol * 0.18, -12);
+    }
+
+    /** 確保程序化噴射 loop（缺檔時）。 */
+    ensureJetLoop(vol = 0.0001) {
+        if (!this.ctx || !this.master || this._jetSrc) return;
+        const buf = this._noiseBuffer(2.0);
+        if (!buf) return;
+        const src = this.ctx.createBufferSource();
+        src.buffer = buf;
+        src.loop = true;
+        const lp = this.ctx.createBiquadFilter();
+        lp.type = 'lowpass';
+        lp.frequency.value = 420;
+        const hp = this.ctx.createBiquadFilter();
+        hp.type = 'highpass';
+        hp.frequency.value = 40;
+        const g = this.ctx.createGain();
+        g.gain.value = Math.max(0.0001, vol);
+        src.connect(hp);
+        hp.connect(lp);
+        lp.connect(g);
+        g.connect(this.master);
+        try { src.start(); } catch { /* */ }
+        this._jetSrc = src;
+        this._jetGain = g;
+    }
+
+    setJetLoopVolume(vol) {
+        if (this._jetGain) this._jetGain.gain.value = Math.max(0.0001, vol);
+    }
+
+    heavyGun() {
+        this.noiseBurst(0.07, 0.32, 280, 0.7);
+        this.noiseBurst(0.04, 0.18, 2200, 1.4);
+        this.beep(95, 0.06, 'sine', 0.16, -40);
+    }
+
+    heavyBoom(scale = 1) {
+        this.noiseBurst(0.7 * scale, 0.42 * scale, 70, 0.4);
+        this.noiseBurst(0.45 * scale, 0.22 * scale, 500, 0.6);
+        this.beep(42, 0.65 * scale, 'sine', 0.28 * scale, -18);
+    }
+
+    radioSquawk(vol = 0.12) {
+        this.noiseBurst(0.08, vol, 1800, 2.5);
+        this.noiseBurst(0.18, vol * 0.6, 900, 1.2);
     }
 }
 
@@ -367,8 +445,22 @@ export class AudioManager {
     }
 
     /**
+     * @param {number} [gainDb]
+     * @returns {BiquadFilterNode|null}
+     */
+    _makeLowShelf(gainDb = null) {
+        if (!this.listener || this.cfg.attack_lowshelf === false) return null;
+        const ctx = this.listener.context;
+        const f = ctx.createBiquadFilter();
+        f.type = 'lowshelf';
+        f.frequency.value = this.cfg.sfx_lowshelf_hz ?? 130;
+        f.gain.value = gainDb ?? this.cfg.sfx_lowshelf_gain_db ?? 5.5;
+        return f;
+    }
+
+    /**
      * @param {AudioKey} key
-     * @param {{ volume?: number, playbackRate?: number, bus?: 'sfx'|'voice'|'engine' }} [opts]
+     * @param {{ volume?: number, playbackRate?: number, bus?: 'sfx'|'voice'|'engine', lowShelf?: boolean|number }} [opts]
      */
     play(key, opts = {}) {
         if (!this._canPlay()) return;
@@ -386,6 +478,10 @@ export class AudioManager {
                 : this.cfg.sfx_volume;
         sound.setVolume((opts.volume ?? 0.55) * bus);
         sound.setPlaybackRate(opts.playbackRate ?? 1);
+        if (opts.lowShelf !== false && (opts.lowShelf || opts.lowShelf === 0)) {
+            const shelf = this._makeLowShelf(typeof opts.lowShelf === 'number' ? opts.lowShelf : null);
+            if (shelf) sound.setFilter(shelf);
+        }
         const ended = sound.onEnded.bind(sound);
         sound.onEnded = () => {
             ended();
@@ -436,6 +532,10 @@ export class AudioManager {
         sound.setRolloffFactor(this.cfg.rolloff);
         sound.setVolume((opts.volume ?? 0.7) * this.cfg.sfx_volume);
         sound.setPlaybackRate(opts.playbackRate ?? 1);
+        if (opts.lowShelf !== false && (opts.lowShelf || opts.lowShelf === 0)) {
+            const shelf = this._makeLowShelf(typeof opts.lowShelf === 'number' ? opts.lowShelf : null);
+            if (shelf) sound.setFilter(shelf);
+        }
         this._tempAnchors.push(anchor);
         this._boundPos.set(anchor, sound);
         try {
@@ -683,6 +783,7 @@ export class AudioManager {
         const gLoad = extra.gLoad ?? 1;
         const turnRate = extra.turnRate ?? 0;
         const boosting = !!extra.boosting;
+        const windBoost = extra.windBoost ?? 0;
         this._boosting = boosting;
 
         const thr = THREE.MathUtils.clamp(throttle, 0, 1);
@@ -690,12 +791,13 @@ export class AudioManager {
         const tCurve = thr ** this.cfg.engine_throttle_exp;
         const sCurve = Math.min(1, spd) ** this.cfg.engine_speed_exp;
 
+        // 窄 pitch：低油門深沉 rumble、高油門輕微嘶鳴，避免像汽車催轉
         const pitch = THREE.MathUtils.lerp(
             this.cfg.engine_pitch_min,
             this.cfg.engine_pitch_max,
-            tCurve * 0.62 + sCurve * 0.38
+            tCurve * 0.72 + sCurve * 0.28
         );
-        const engVol = (0.12 + tCurve * 0.55 + sCurve * 0.22)
+        const engVol = (0.22 + tCurve * 0.48 + sCurve * 0.18 + (boosting ? 0.08 : 0))
             * this.cfg.engine_volume
             * (this._paused ? 0 : 1);
 
@@ -705,17 +807,21 @@ export class AudioManager {
             if (!this.engineAudio.isPlaying && this._canPlay()) {
                 try { this.engineAudio.play(); } catch { /* */ }
             }
+        } else if (this.missing.has('engine')) {
+            this._proc.ensureJetLoop(engVol * 0.85);
+            this._proc.setJetLoopVolume(Math.max(0.0001, engVol * 0.85));
         }
 
         const gFactor = Math.min(1.8, Math.abs(gLoad - 1) * 0.45);
         const turnFactor = Math.min(1, Math.abs(turnRate) * 0.55);
-        const windAmt = Math.min(1.2, sCurve * 0.75 + gFactor + turnFactor * 0.35 + (boosting ? 0.25 : 0));
+        const windAmt = Math.min(1.35, sCurve * 0.7 + gFactor + turnFactor * 0.35
+            + (boosting ? 0.22 : 0) + windBoost);
         const windPitch = THREE.MathUtils.lerp(
             this.cfg.wind_pitch_min,
             this.cfg.wind_pitch_max,
             Math.min(1, windAmt)
         );
-        const windVol = (0.04 + windAmt * 0.55) * this.cfg.wind_volume * (this._paused ? 0 : 1);
+        const windVol = (0.03 + windAmt * 0.62) * this.cfg.wind_volume * (this._paused ? 0 : 1);
         if (this.windAudio?.buffer) {
             this.windAudio.setPlaybackRate(windPitch);
             this.windAudio.setVolume(Math.max(0.0001, windVol));
@@ -725,10 +831,10 @@ export class AudioManager {
         }
 
         const abVol = boosting
-            ? this.cfg.afterburner_volume * (0.55 + tCurve * 0.45)
+            ? this.cfg.afterburner_volume * (0.6 + tCurve * 0.5)
             : 0.0001;
         if (this.afterburnerAudio?.buffer) {
-            this.afterburnerAudio.setPlaybackRate(boosting ? 1.05 + sCurve * 0.2 : 1);
+            this.afterburnerAudio.setPlaybackRate(boosting ? 1.02 + sCurve * 0.12 : 1);
             this.afterburnerAudio.setVolume(Math.max(0.0001, abVol * (this._paused ? 0 : 1)));
             if (!this.afterburnerAudio.isPlaying && this._canPlay()) {
                 try { this.afterburnerAudio.play(); } catch { /* */ }
@@ -737,28 +843,36 @@ export class AudioManager {
     }
 
     gun() {
+        const vol = this.cfg.gun_volume ?? 1.05;
+        // 可重疊短樣本：主層 thrump＋輕金屬層
         this.play('gun', {
-            volume: this.cfg.gun_volume ?? 0.82,
-            playbackRate: 0.92 + Math.random() * 0.2,
+            volume: vol,
+            playbackRate: 0.88 + Math.random() * 0.22,
+            lowShelf: 6.5,
         });
-        if (this.missing.has('gun')) {
-            this._proc.noiseBurst(0.08, 0.28, 1800, 2);
-            this._proc.beep(180, 0.05, 'square', 0.12, -80);
-        }
+        this.play('gun', {
+            volume: vol * 0.38,
+            playbackRate: 1.05 + Math.random() * 0.18,
+            lowShelf: 3.5,
+        });
+        if (this.missing.has('gun')) this._proc.heavyGun();
     }
 
     /**
      * @param {{ foxTwo?: boolean }} [opts] 玩家發射時播 Fox Two
      */
     missile(opts = {}) {
-        this.play('missile', { volume: this.cfg.missile_volume ?? 0.92 });
+        const vol = this.cfg.missile_volume ?? 1.08;
+        this.play('missile', { volume: vol, playbackRate: 0.92 + Math.random() * 0.1, lowShelf: 7 });
+        // 疊一層低頻 thruster
+        this.play('missile', { volume: vol * 0.42, playbackRate: 0.72, lowShelf: 9 });
         if (opts.foxTwo !== false && this._foxTwoT <= 0) {
             this._foxTwoT = this.cfg.fox_two_cooldown;
             this.play('foxTwo', { volume: this.cfg.fox_two_volume ?? 1.1, bus: 'voice' });
         }
         if (this.missing.has('missile')) {
-            this._proc.noiseBurst(0.4, 0.28, 400, 0.8);
-            this._proc.beep(220, 0.4, 'sawtooth', 0.14, 400);
+            this._proc.jetRumble(0.45, 0.28);
+            this._proc.noiseBurst(0.35, 0.2, 900, 0.7);
         }
     }
 
@@ -767,20 +881,29 @@ export class AudioManager {
      * @param {THREE.Vector3|null} [position]
      */
     boom(scale = 1, position = null) {
-        const base = this.cfg.boom_volume ?? 1.05;
-        const vol = Math.min(1.35, base * 0.72 * scale);
-        const rate = THREE.MathUtils.clamp(1.15 - scale * 0.12, 0.65, 1.2);
-        if (position) {
-            this.playAt(scale > 1.6 ? 'boom' : 'boom', position, { volume: vol, playbackRate: rate });
-            if (scale > 1.4) this.playAt('boomLow', position, { volume: vol * 0.75, playbackRate: rate * 0.9 });
-        } else {
-            this.play('boom', { volume: vol, playbackRate: rate });
-            if (scale > 1.4) this.play('boomLow', { volume: vol * 0.7, playbackRate: rate * 0.9 });
+        const base = this.cfg.boom_volume ?? 1.28;
+        const nearDist = this.cfg.boom_near_distance ?? 58;
+        const chest = this.cfg.boom_chest_gain ?? 1.4;
+        let near = 1;
+        if (position && this.listener?.parent) {
+            const d = position.distanceTo(this.listener.parent.position);
+            near = THREE.MathUtils.clamp(1.35 - d / nearDist, 0.55, 1.35);
         }
-        if (this.missing.has('boom')) {
-            this._proc.noiseBurst(0.55 * scale, 0.4 * scale, 120, 0.5);
-            this._proc.beep(60, 0.5 * scale, 'sine', 0.3 * scale, -40);
+        const vol = Math.min(1.55, base * 0.7 * scale * (near > 1 ? near * (chest / 1.2) : near));
+        const rate = THREE.MathUtils.clamp(1.08 - scale * 0.1, 0.62, 1.15);
+        const shelf = 4 + near * 4;
+        const playBoom = (key, v, r, ls) => {
+            if (position) this.playAt(key, position, { volume: v, playbackRate: r, lowShelf: ls });
+            else this.play(key, { volume: v, playbackRate: r, lowShelf: ls });
+        };
+        // 分層：中頻碎裂 + 低頻 boom +（近距）遠尾轟鳴
+        playBoom('boom', vol, rate, shelf);
+        playBoom('boomMid', vol * 0.55, rate * 1.05, shelf * 0.6);
+        playBoom('boomLow', vol * (0.55 + near * 0.35), rate * 0.85, shelf + 2);
+        if (near > 0.95 || scale > 1.2) {
+            playBoom('boomFar', vol * 0.4 * near, rate * 0.75, shelf);
         }
+        if (this.missing.has('boom')) this._proc.heavyBoom(scale * near);
     }
 
     boost() {
@@ -827,8 +950,62 @@ export class AudioManager {
     }
 
     hit() {
-        this.play('hit', { volume: this.cfg.hit_volume ?? 0.78 });
-        if (this.missing.has('hit')) this._proc.noiseBurst(0.2, 0.28, 300, 1.2);
+        const vol = this.cfg.hit_volume ?? 0.98;
+        this.play('hit', { volume: vol, playbackRate: 0.9 + Math.random() * 0.15, lowShelf: 7 });
+        this.play('hit', { volume: vol * 0.4, playbackRate: 0.7, lowShelf: 9 });
+        if (this.missing.has('hit')) {
+            this._proc.noiseBurst(0.22, 0.32, 220, 0.8);
+            this._proc.beep(90, 0.15, 'sine', 0.14, -30);
+        }
+    }
+
+    /**
+     * 無線電靜電／失真開頭（Radio Chatter）。
+     * @param {number} [vol]
+     */
+    radioBurst(vol = null) {
+        const v = vol ?? this.cfg.radio_volume ?? 0.72;
+        if (this.buffers.has('radioStatic')) {
+            this.play('radioStatic', { volume: v * 0.55, playbackRate: 0.9 + Math.random() * 0.25 });
+        } else {
+            this._proc.radioSquawk(v * 0.18);
+        }
+    }
+
+    /**
+     * 以 Web Speech 播報無線電台詞，套 bandpass＋失真濾波。
+     * @param {string} line
+     * @param {{ volume?: number }} [opts]
+     */
+    speakRadio(line, opts = {}) {
+        if (!this._canPlay() || !line) return;
+        this.radioBurst(opts.volume);
+        const syn = typeof window !== 'undefined' ? window.speechSynthesis : null;
+        if (!syn || typeof SpeechSynthesisUtterance === 'undefined') {
+            this._procRadioTone(line);
+            return;
+        }
+        try {
+            syn.cancel();
+            const u = new SpeechSynthesisUtterance(String(line));
+            u.rate = 1.05;
+            u.pitch = 0.85;
+            u.volume = Math.min(1, (opts.volume ?? this.cfg.radio_volume ?? 0.72) * 0.85);
+            // 瀏覽器語音無法直接進 AudioContext filter；搭配靜電營造無線電感
+            syn.speak(u);
+        } catch {
+            this._procRadioTone(line);
+        }
+    }
+
+    _procRadioTone(line) {
+        const n = Math.min(8, Math.max(3, String(line).length / 12));
+        for (let i = 0; i < n; i++) {
+            setTimeout(() => {
+                this._proc.beep(380 + i * 40 + Math.random() * 80, 0.05, 'square', 0.05);
+                this._proc.noiseBurst(0.04, 0.06, 1400, 2);
+            }, i * 55);
+        }
     }
 
     waypoint() {
@@ -943,18 +1120,23 @@ export class AudioManager {
         if (!this._canPlay()) return;
         switch (key) {
             case 'gun':
-                this._proc.noiseBurst(0.06, 0.22, 1800, 2);
+                this._proc.heavyGun();
                 break;
             case 'missile':
             case 'missileWhoosh':
-                this._proc.noiseBurst(0.3, 0.18, 400, 0.8);
+                this._proc.jetRumble(0.35, 0.22);
                 break;
             case 'boom':
             case 'boomLow':
-                this._proc.noiseBurst(0.45, 0.3, 120, 0.5);
+            case 'boomMid':
+            case 'boomFar':
+                this._proc.heavyBoom(1);
                 break;
             case 'hit':
-                this._proc.noiseBurst(0.12, 0.18, 300, 1.2);
+                this._proc.noiseBurst(0.16, 0.26, 220, 0.9);
+                break;
+            case 'radioStatic':
+                this._proc.radioSquawk(0.14);
                 break;
             case 'radarBeep':
             case 'lockTick':

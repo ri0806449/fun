@@ -53,3 +53,23 @@
 ## Fallback
 
 若瀏覽器無法解碼或檔案缺失，`AudioManager` 會退回程序化 Web Audio（振盪器／噪聲），遊戲不應因此崩潰。
+
+
+## 專案自製 — 二戰轟炸感攻擊／噴射引擎（CC0）
+
+以 Python 合成之可商用音檔（非遊戲原聲取樣）：
+
+- `engine/jet_loop.wav` — 連續噴射 rumble＋渦輪嘶鳴（無汽車燃燒脈衝）
+- `engine/afterburner.wav` — 後燃低頻咆哮
+- `engine/enemy_engine.wav` — 遠距噴射／巡航低頻
+- `sfx/gun.wav` — 高射砲／重機槍短樣本（可重疊連射）
+- `sfx/missile_launch.wav` — 火箭點火＋低頻 thruster
+- `sfx/explosion.wav`／`explosion_mid.wav`／`explosion_low.wav`／`explosion_far.wav` — 分層爆炸（碎裂／胸口震動／遠距轟鳴）
+- `sfx/hit.wav` — 厚重金屬命中
+- `sfx/radio_static.wav` — 無線電靜電開頭
+
+舊 Kenney 科幻 `.ogg` 仍保留為載入備援，但 MANIFEST 優先使用上述 wav／Mixkit 噴射 mp3。
+
+## 無線電語音
+
+座艙無線電台詞以瀏覽器 **Web Speech API** 即時合成，並疊加 `radio_static` 靜電；非受版權保護之遊戲語音包。
