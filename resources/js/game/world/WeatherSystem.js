@@ -5,6 +5,8 @@ import {
     clampRayleigh,
     clampSunIntensity,
     clampTurbidity,
+    clampWeatherFogMul,
+    clampWeatherSunDim,
     TURBIDITY_MAX,
 } from './atmosphereLimits.js';
 
@@ -80,6 +82,9 @@ export class WeatherSystem {
         this._lastRain = -1;
         this._skyDirty = true;
         this._applySky(0, 0);
+        if (this.sceneBuilder?.env) {
+            this.sceneBuilder.env.weather_sun_dim = 1;
+        }
         if (this._rainMat) this._rainMat.opacity = 0;
         if (this._rain) this._rain.visible = false;
     }
@@ -158,8 +163,8 @@ export class WeatherSystem {
         const r = THREE.MathUtils.clamp(rainBlend, 0, 1);
 
         const elevClear = this.cfg.elevation_clear ?? this._baseElev;
-        const elevDusk = this.cfg.elevation_dusk ?? -2.5;
-        const elevRain = this.cfg.elevation_rain ?? -6;
+        const elevDusk = this.cfg.elevation_dusk ?? 2.5;
+        const elevRain = this.cfg.elevation_rain ?? 0.5;
         const elev = d < 1
             ? THREE.MathUtils.lerp(elevClear, elevDusk, d)
             : THREE.MathUtils.lerp(elevDusk, elevRain, r);
@@ -171,16 +176,18 @@ export class WeatherSystem {
             Math.max(d * 0.5, r)
         ));
         sb.env.sky_rayleigh = clampRayleigh(THREE.MathUtils.lerp(0.72, 0.95, d));
-        sb.env.sun_intensity = clampSunIntensity(this._baseSun * THREE.MathUtils.lerp(
+        // 日照基準永遠回寫晴天值；天氣壓暗只走 weather_sun_dim，避免與仰角係數雙重乘算漂暗
+        sb.env.sun_intensity = this._baseSun;
+        sb.env.weather_sun_dim = clampWeatherSunDim(THREE.MathUtils.lerp(
             1,
-            0.45,
+            0.86,
             Math.max(d, r * 0.8)
         ));
         sb.env.ambient_intensity = clampAmbientIntensity(
-            this._baseAmb * THREE.MathUtils.lerp(1, 0.7, d)
+            this._baseAmb * THREE.MathUtils.lerp(1, 0.88, d)
         );
 
-        const fogMul = Math.min(2.6, Math.max(1, this.cfg.fog_mul_rain ?? 2.4));
+        const fogMul = clampWeatherFogMul(this.cfg.fog_mul_rain ?? 1.85);
         const fogTarget = clampFogDensity(this._baseFog * THREE.MathUtils.lerp(1, fogMul, r));
         // 強制同步高度霧：降頻路徑不會因高度沒變而漏掉雨霧加濃
         if (typeof sb.setFogBase === 'function') {
@@ -195,8 +202,8 @@ export class WeatherSystem {
 
         if (sb.sunLight) {
             const warm = d * (1 - r * 0.5);
-            // 絕對 setHSL（非 offset），避免色溫累積變白
-            sb.sunLight.color.setHSL(0.07 + warm * 0.02, 0.45 + warm * 0.25, 0.78 - r * 0.15);
+            // 絕對 setHSL（非 offset），避免色溫累積變白；L 下限避免雨相過黑
+            sb.sunLight.color.setHSL(0.07 + warm * 0.02, 0.45 + warm * 0.25, Math.max(0.62, 0.78 - r * 0.1));
         }
     }
 

@@ -200,6 +200,7 @@ class GameConfigTest extends TestCase
         $this->assertArrayHasKey('motion_blur', $visual);
         $this->assertArrayHasKey('radial_blur', $visual);
         $this->assertGreaterThan(0.4, $visual['tone_mapping_exposure'], '曝光過低會在部分 GPU 上接近全黑');
+        $this->assertGreaterThanOrEqual(0.7, $visual['tone_mapping_exposure'], '預設曝光應足以應付黃昏／雨霧疊加');
         $this->assertLessThanOrEqual(1.2, $visual['tone_mapping_exposure']);
         $this->assertLessThan(0.35, $visual['bloom_strength']);
         $this->assertGreaterThanOrEqual(0.9, $visual['bloom_threshold']);
@@ -232,10 +233,12 @@ class GameConfigTest extends TestCase
             $this->assertArrayHasKey($key, $weather, "缺少 weather.{$key}");
         }
         $this->assertLessThan($weather['rain_at'], $weather['dusk_at']); // dusk_at < rain_at
-        // 防洗白：雨天 turbidity／霧倍率不可過高
+        // 防洗白亦防過暗：雨天 turbidity／霧倍率不可過高
         $this->assertLessThanOrEqual(14.0, (float) $weather['turbidity_rain']);
-        $this->assertLessThanOrEqual(2.6, (float) $weather['fog_mul_rain']);
+        $this->assertLessThanOrEqual(2.0, (float) $weather['fog_mul_rain']);
         $this->assertGreaterThanOrEqual(1.0, (float) $weather['fog_mul_rain']);
+        $this->assertGreaterThanOrEqual(0.0, (float) $weather['elevation_rain'], '雨天仰角不宜過負以免天空近黑');
+        $this->assertGreaterThanOrEqual(2.0, (float) $weather['elevation_dusk']);
 
         $stunts = $config['stunts'];
         foreach (['low_alt_agl', 'low_alt_hold', 'close_call_distance', 'close_call_score'] as $key) {

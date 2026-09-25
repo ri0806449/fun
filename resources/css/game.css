@@ -9,19 +9,19 @@ canvas{display:block}
 #fx-overlay{
   position:absolute;inset:0;pointer-events:none;z-index:2;
   background:
-    radial-gradient(ellipse 65% 55% at 50% 40%,transparent 38%,rgba(0,10,30,.38) 100%),
-    linear-gradient(180deg,rgba(0,15,40,.28) 0%,transparent 16%,transparent 70%,rgba(0,8,24,.45) 100%);
+    radial-gradient(ellipse 65% 55% at 50% 40%,transparent 42%,rgba(0,10,30,.22) 100%),
+    linear-gradient(180deg,rgba(0,15,40,.16) 0%,transparent 16%,transparent 70%,rgba(0,8,24,.28) 100%);
   transition:background .15s;
 }
 #fx-overlay.fast{
   background:
-    radial-gradient(ellipse 55% 48% at 50% 42%,transparent 22%,rgba(0,8,28,.55) 72%,rgba(0,4,18,.78) 100%),
-    linear-gradient(180deg,rgba(0,20,50,.35) 0%,transparent 14%,transparent 68%,rgba(0,6,20,.55) 100%);
+    radial-gradient(ellipse 55% 48% at 50% 42%,transparent 28%,rgba(0,8,28,.32) 72%,rgba(0,4,18,.48) 100%),
+    linear-gradient(180deg,rgba(0,20,50,.22) 0%,transparent 14%,transparent 68%,rgba(0,6,20,.34) 100%);
 }
 #fx-overlay.boost{
   background:
-    radial-gradient(ellipse 48% 42% at 50% 42%,transparent 12%,rgba(0,6,22,.62) 65%,rgba(0,2,12,.88) 100%),
-    linear-gradient(180deg,rgba(0,25,55,.4) 0%,transparent 12%,transparent 66%,rgba(0,4,16,.6) 100%);
+    radial-gradient(ellipse 48% 42% at 50% 42%,transparent 18%,rgba(0,6,22,.38) 65%,rgba(0,2,12,.55) 100%),
+    linear-gradient(180deg,rgba(0,25,55,.26) 0%,transparent 12%,transparent 66%,rgba(0,4,16,.4) 100%);
 }
 #cloud-drops{
   position:absolute;inset:0;pointer-events:none;z-index:3;opacity:0;

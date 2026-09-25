@@ -581,6 +581,9 @@ export class GameCore {
     /** @param {string} outcome Outcome 之一 */
     endGame(outcome) {
         this.outcome = outcome;
+        // 結束時清掉速度暗角，避免 GAMEOVER 殘留 .fast/.boost 把結算畫面壓暗
+        this.hud.setSpeedFx(0, false);
+        this.hud.setCloudFx?.(0);
         this.hud.showEnd({
             title: OUTCOME_TITLES[outcome] ?? 'MISSION END',
             score: this.score,

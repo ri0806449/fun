@@ -12,6 +12,7 @@ import {
     clampSunIntensity,
     clampTurbidity,
     fogLightnessForAltitude,
+    sunLightIntensityFor,
 } from './atmosphereLimits.js';
 
 /** 可變陽光方向（各系統共享；SceneBuilder 依 elevation／azimuth 更新）。 */
@@ -270,11 +271,15 @@ export class SceneBuilder {
         }
         if (this.sunLight) {
             this.sunLight.position.copy(this.sunDirection).multiplyScalar(220);
-            // 低仰角時再降強度、偏暖（基準來自 config）
-            const elev01 = Math.max(0, Math.min(1, elev / 45));
+            // 基準強度保持晴天值；仰角／天氣倍率只套在 light.intensity（絕對公式，不回寫累乘）
             const base = clampSunIntensity(this.env.sun_intensity ?? 0.38);
             this.env.sun_intensity = base;
-            this.sunLight.intensity = Math.min(1.05, base * (0.65 + elev01 * 0.4));
+            const elev01 = Math.max(0, Math.min(1, elev / 45));
+            this.sunLight.intensity = sunLightIntensityFor(
+                base,
+                elev,
+                this.env.weather_sun_dim ?? 1
+            );
             this.sunLight.color.setHSL(0.07 + elev01 * 0.04, 0.48, 0.82);
         }
         if (this.ambientLight) {

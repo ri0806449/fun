@@ -73,9 +73,9 @@ const GRADE_SHADER = {
             }
 
             c.rgb=mix(c.rgb,c.rgb*vec3(0.88,0.94,1.06),0.22);
-            c.rgb*=max(gradeExposure,0.35);
-            float vig=1.0-smoothstep(0.22,1.05,dist*(2.0+blur*1.2+boost*0.5));
-            c.rgb*=clamp(vig,0.15,1.0);
+            c.rgb*=max(gradeExposure,0.45);
+            float vig=1.0-smoothstep(0.28,1.12,dist*(1.7+blur*0.9+boost*0.35));
+            c.rgb*=clamp(vig,0.42,1.0);
             float streak=pow(max(0.0,abs(cc.x)-0.15),2.0)*(blur+boost)*0.1;
             c.rgb+=vec3(0.45,0.62,0.88)*streak;
             gl_FragColor=vec4(c.rgb,1.0);
@@ -239,8 +239,10 @@ export class PostFx {
             + Math.max(0, speedNorm - 0.65) * 0.35 * this.motionBlurScale;
         this.gradePass.uniforms.radialBlur.value = (0.55 + b * 1.1) * this.radialBlurScale;
 
-        const wetTarget = impulse.cloudWet ?? 0;
+        const wetTarget = Math.max(0, Math.min(1, impulse.cloudWet ?? 0));
+        // 絕對逼近目標，避免穿雲後 cloudWet 殘留把畫面鎖暗
         this._cloudWet += (wetTarget - this._cloudWet) * 0.15;
+        if (wetTarget < 0.001 && this._cloudWet < 0.02) this._cloudWet = 0;
         this.gradePass.uniforms.cloudWet.value = this._cloudWet;
     }
 
