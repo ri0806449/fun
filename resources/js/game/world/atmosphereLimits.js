@@ -91,3 +91,39 @@ export function fogLightnessForAltitude(altitude) {
     const alt = Number.isFinite(altitude) ? Math.max(0, altitude) : 0;
     return clamp(0.17 + Math.min(0.15, alt / 900), FOG_LIGHTNESS_MIN, FOG_LIGHTNESS_MAX);
 }
+
+/**
+ * Sky.js 為單位 BoxGeometry 再 scale；半邊長 = scale/2。
+ * 天穹若釘在原點，直飛超過此距離會穿出盒子 → 背景清／黑破圖。
+ * @param {number} skyScale
+ */
+export function skyHalfExtent(skyScale) {
+    const s = Number(skyScale);
+    return Math.max(1, Number.isFinite(s) ? s : 4500) * 0.5;
+}
+
+/**
+ * 相機 far 必須大於天穹半邊長，否則跟隨相機後仍會裁掉天空盒面。
+ * @param {number} skyScale
+ * @param {number} [margin=1.35]
+ */
+export function cameraFarForSky(skyScale, margin = 1.35) {
+    const m = Number.isFinite(margin) && margin > 1 ? margin : 1.35;
+    return Math.ceil(skyHalfExtent(skyScale) * 2 * m);
+}
+
+/**
+ * 每幀把天穹中心鎖在相機上，避免長距離直飛穿出 Sky box。
+ * @param {import('three').Object3D|null|undefined} sky
+ * @param {{ position: { x:number, y:number, z:number } }|null|undefined} camera
+ */
+export function syncSkyDomeToCamera(sky, camera) {
+    if (!sky || !camera?.position) return false;
+    const p = camera.position;
+    if (!Number.isFinite(p.x) || !Number.isFinite(p.y) || !Number.isFinite(p.z)) return false;
+    sky.position.x = p.x;
+    sky.position.y = p.y;
+    sky.position.z = p.z;
+    sky.frustumCulled = false;
+    return true;
+}

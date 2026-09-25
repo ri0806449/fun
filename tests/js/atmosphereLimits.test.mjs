@@ -13,6 +13,9 @@ import {
     clampWeatherFogMul,
     fogLightnessForAltitude,
     sunLightIntensityFor,
+    syncSkyDomeToCamera,
+    skyHalfExtent,
+    cameraFarForSky,
     FOG_LIGHTNESS_MAX,
     TURBIDITY_MAX,
     EXPOSURE_MAX,
@@ -54,6 +57,29 @@ describe('atmosphereLimits', () => {
         // 重複呼叫同一輸入必須位元級穩定（無累乘）
         assert.equal(sunLightIntensityFor(0.38, 0.5, 0.86), rain);
         assert.ok(sunLightIntensityFor(0.38, -10, 0.5) >= SUN_LIGHT_MIN);
+    });
+
+    it('天穹半邊長與 camera.far 有安全餘裕，直飛不會因 far 裁掉天空', () => {
+        const scale = 4500;
+        const half = skyHalfExtent(scale);
+        assert.equal(half, 2250);
+        const far = cameraFarForSky(scale);
+        assert.ok(far > half, 'far 必須大於天穹半邊長');
+        assert.ok(far >= 5500, 'far 不應比舊硬編碼更短');
+        // 巡航 ~80u/s：約 28s 即超過半邊長——此為必須跟隨相機的距離證據
+        assert.ok(half / 80 < 40, '未跟隨時數十秒內必穿出');
+    });
+
+    it('syncSkyDomeToCamera 在遠距仍把天穹鎖在相機上', () => {
+        const sky = { position: { x: 0, y: 0, z: 0 }, frustumCulled: true };
+        const cam = { position: { x: 120, y: 90, z: -8000 } };
+        assert.equal(syncSkyDomeToCamera(sky, cam), true);
+        assert.equal(sky.position.x, 120);
+        assert.equal(sky.position.y, 90);
+        assert.equal(sky.position.z, -8000);
+        assert.equal(sky.frustumCulled, false);
+        assert.equal(syncSkyDomeToCamera(null, cam), false);
+        assert.equal(syncSkyDomeToCamera(sky, null), false);
     });
 });
 

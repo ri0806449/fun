@@ -133,6 +133,12 @@ export class WaterSystem {
      * @param {THREE.Vector3} [sunDir]
      */
     update(time, cameraPos, sunDir = null) {
+        // XZ 跟隨不受 uniform 降頻影響，否則飛行降載時會短暫飛出海面邊緣
+        if (cameraPos && Number.isFinite(cameraPos.x) && Number.isFinite(cameraPos.z)) {
+            this.water.position.x = cameraPos.x;
+            this.water.position.z = cameraPos.z;
+        }
+
         const hz = this._uniformHz;
         if (hz > 0) {
             // 累積由呼叫端以固定 timestep 近似；此處用簡易隔幀：僅當 acc 歸零才寫

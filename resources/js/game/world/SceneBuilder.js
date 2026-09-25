@@ -13,6 +13,7 @@ import {
     clampTurbidity,
     fogLightnessForAltitude,
     sunLightIntensityFor,
+    syncSkyDomeToCamera,
 } from './atmosphereLimits.js';
 
 /** 可變陽光方向（各系統共享；SceneBuilder 依 elevation／azimuth 更新）。 */
@@ -203,6 +204,8 @@ export class SceneBuilder {
     _buildSky() {
         this.sky = new Sky();
         this.sky.scale.setScalar(this.env.sky_scale ?? 4500);
+        // 單位盒 × scale 半邊長約 sky_scale/2；釘原點時直飛數十秒即穿出 → 破圖變黑
+        this.sky.frustumCulled = false;
         this.scene.add(this.sky);
         this._patchSkySunShader(this.sky.material);
         this._applySkyUniforms();
@@ -602,6 +605,9 @@ export class SceneBuilder {
      * @param {{ updateFog?: boolean }} [opts]
      */
     update(dt, time, camera = null, opts = {}) {
+        // 天穹必須跟相機：否則長距離直飛穿出 Sky box，背景變清／黑
+        if (camera) syncSkyDomeToCamera(this.sky, camera);
+
         if (camera && opts.updateFog !== false) this._applyHeightFog(camera.position.y);
 
         // Lensflare 錨在相機前方陽光方向
@@ -620,7 +626,18 @@ export class SceneBuilder {
         const camPos = camera?.position;
         for (const cg of this.cloudGroups) {
             cg.position.x += (cg.userData.drift || 3) * dt * 0.35;
-            if (cg.position.x > 2300) cg.position.x = -2300;
+            // 相對相機 wrap，避免直飛後雲場留在原點、遠景變空
+            if (camPos) {
+                const wrap = 2300;
+                const dx = cg.position.x - camPos.x;
+                const dz = cg.position.z - camPos.z;
+                if (dx > wrap) cg.position.x -= wrap * 2;
+                else if (dx < -wrap) cg.position.x += wrap * 2;
+                if (dz > wrap) cg.position.z -= wrap * 2;
+                else if (dz < -wrap) cg.position.z += wrap * 2;
+            } else if (cg.position.x > 2300) {
+                cg.position.x = -2300;
+            }
 
             if (!doCloudVisual) continue;
 
