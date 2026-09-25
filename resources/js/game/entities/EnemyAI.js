@@ -58,6 +58,8 @@ export class EnemyAI {
         this._mat = new THREE.Matrix4();
         this._turretOrigin = new THREE.Vector3();
         this._turretDir = new THREE.Vector3();
+        this._tmp3 = new THREE.Vector3();
+        this._tmp4 = new THREE.Vector3();
         this._fix = new THREE.Quaternion().setFromAxisAngle(WORLD_UP, Math.PI);
 
         // 轟炸機砲塔本地偏移（機背／機腹）
@@ -111,13 +113,18 @@ export class EnemyAI {
         if (this.flareCd > 0 || this.classType === 'drone') return;
         this.flareCd = this.cfg.flare_cooldown;
         const pos = this.mesh.position;
-        const back = this.getForward().clone().multiplyScalar(-1);
+        this._tmp.copy(this.getForward()).multiplyScalar(-1);
 
-        for (let i = 0; i < 7; i++) {
-            const vel = back.clone().multiplyScalar(8 + Math.random() * 14).add(
-                new THREE.Vector3((Math.random() - 0.5) * 22, Math.random() * 12 - 2, (Math.random() - 0.5) * 22)
+        for (let i = 0; i < 5; i++) {
+            this._tmp2.copy(this._tmp).multiplyScalar(8 + Math.random() * 14);
+            this._tmp3.set(
+                (Math.random() - 0.5) * 22,
+                Math.random() * 12 - 2,
+                (Math.random() - 0.5) * 22
             );
-            explosionPool.spawnFlare(pos.clone().addScaledVector(back, 2 + i * 0.4), vel);
+            this._tmp2.add(this._tmp3);
+            this._tmp4.copy(pos).addScaledVector(this._tmp, 2 + i * 0.4);
+            explosionPool.spawnFlare(this._tmp4, this._tmp2);
         }
 
         for (const m of missiles) {
@@ -134,9 +141,9 @@ export class EnemyAI {
     }
 
     _fireGun(bulletPool, player, origin, dir, damage, color = 0xff3344) {
-        const vel = dir.clone().multiplyScalar(this.cfg.gun_projectile_speed * (0.95 + Math.random() * 0.15));
-        vel.addScaledVector(player.velocity, 0.012);
-        bulletPool.spawn(origin, this.mesh.quaternion, vel, {
+        this._tmp3.copy(dir).multiplyScalar(this.cfg.gun_projectile_speed * (0.95 + Math.random() * 0.15));
+        this._tmp3.addScaledVector(player.velocity, 0.012);
+        bulletPool.spawn(origin, this.mesh.quaternion, this._tmp3, {
             team: 'enemy',
             life: this.cfg.gun_projectile_life,
             damage,
@@ -226,8 +233,9 @@ export class EnemyAI {
             const fwd = this.getForward();
             const up = this._tmp2.set(0, 1, 0).applyQuaternion(mesh.quaternion);
             this._desired.copy(fwd).multiplyScalar(40)
-                .addScaledVector(up, this.rollRate > 0 ? 35 : -35)
-                .add(new THREE.Vector3((Math.random() - 0.5) * 10, 8, (Math.random() - 0.5) * 10));
+                .addScaledVector(up, this.rollRate > 0 ? 35 : -35);
+            this._tmp3.set((Math.random() - 0.5) * 10, 8, (Math.random() - 0.5) * 10);
+            this._desired.add(this._tmp3);
             this._steerToward(this._desired, this.evadeSpeed, dt, 3.5);
             if (this.flareCd <= 0.05 && (locked || inbound)) {
                 this.deployFlares(explosionPool, missiles);
@@ -293,8 +301,8 @@ export class EnemyAI {
         const aimDot = fwd.dot(aim);
         if (dist < this.gunRange && aimDot > 0.72 && this.gunAcc >= this.gunInterval) {
             this.gunAcc = 0;
-            const origin = this.mesh.position.clone().addScaledVector(fwd, 4.5);
-            this._fireGun(bulletPool, player, origin, fwd, this.gunDamage);
+            this._tmp4.copy(this.mesh.position).addScaledVector(fwd, 4.5);
+            this._fireGun(bulletPool, player, this._tmp4, fwd, this.gunDamage);
         }
     }
 

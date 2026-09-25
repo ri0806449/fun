@@ -34,18 +34,34 @@ class GameConfigTest extends TestCase
             'flight_cloud_update_stride', 'flight_cloud_density_hz', 'flight_fog_hz',
             'flight_engine_audio_hz', 'flight_engine_audio_epsilon', 'flight_los_samples',
             'flight_missile_smoke_interval', 'flight_ai_far_skip_frames', 'flight_max_delta',
+            'flight_lock_hz', 'flight_gun_audio_layers', 'flight_explosion_lights',
+            'flight_water_uniform_hz', 'flight_contrail_spawn_mul', 'flight_trail_interval_mul',
+            'flight_orbit_yaw_threshold', 'flight_orbit_cloud_stride_boost',
+            'flight_distant_craft_stride', 'flight_cloud_far_skip_mul',
+            'combat_boom_particle_count', 'combat_max_trail_particles',
         ] as $key) {
             $this->assertArrayHasKey($key, $perf, "缺少 performance.{$key}");
         }
 
         $this->assertFalse($perf['ambient_boom_enabled']);
+        $this->assertFalse($perf['flight_explosion_lights']);
         $this->assertSame(0, (int) $perf['flight_water_reflection_interval']);
-        $this->assertLessThanOrEqual($perf['max_pixel_ratio'], $perf['flight_max_pixel_ratio'] + 0.5);
+        // 飛行 DPR 上限不得高於選單／展示上限
+        $this->assertLessThanOrEqual(
+            (float) $perf['max_pixel_ratio'],
+            (float) $perf['flight_max_pixel_ratio']
+        );
         $this->assertLessThanOrEqual(1.25, (float) $perf['flight_max_pixel_ratio']);
         $this->assertGreaterThan(0, $perf['flight_cloud_update_stride']);
+        $this->assertGreaterThanOrEqual(5, (int) $perf['flight_cloud_update_stride']);
         $this->assertGreaterThan(0, $perf['flight_engine_audio_hz']);
         $this->assertGreaterThan(0, $perf['flight_los_samples']);
         $this->assertLessThan(24, (int) $perf['flight_los_samples']);
+        $this->assertLessThanOrEqual(10, (int) $perf['radar_hz']);
+        $this->assertLessThanOrEqual(12, (int) $perf['world_hud_hz']);
+        $this->assertSame(1, (int) $perf['flight_gun_audio_layers']);
+        $this->assertGreaterThan(0, $perf['flight_lock_hz']);
+        $this->assertGreaterThan(0, $perf['combat_boom_particle_count']);
     }
 
     public function test_perks_meta_and_achievements_are_configured(): void

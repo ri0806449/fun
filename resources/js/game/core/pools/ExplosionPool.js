@@ -4,12 +4,17 @@ import { ObjectPool } from './ObjectPool.js';
 /**
  * 爆炸／彈道煙／熱焰彈／水花共用的粒子池。
  * 池內固定比例混入 flash 與 PointLight，避免執行期新建。
+ * 速度向量複用 scratch，戰鬥中可關閉 PointLight 以避開 Standard 燈光重算。
  */
 export class ExplosionPool extends ObjectPool {
     constructor(scene, capacity, { maxTrailParticles = 90, boomParticleCount = 8 } = {}) {
         super(scene, capacity);
         this.maxTrailParticles = maxTrailParticles;
         this.boomParticleCount = boomParticleCount;
+        /** @type {boolean} 飛行降載時可關閉，避免每幀燈光列表重算 */
+        this.allowLights = true;
+        this._scratchVel = new THREE.Vector3();
+        this._scratchPos = new THREE.Vector3();
         const boomGeo = new THREE.SphereGeometry(0.4, 5, 5);
         const flashGeo = new THREE.SphereGeometry(3.2, 10, 10);
 
@@ -55,6 +60,7 @@ export class ExplosionPool extends ObjectPool {
     }
 
     _takeLight() {
+        if (!this.allowLights) return null;
         const light = this.free.find((o) => o.isLight);
         if (!light) return null;
         this.free.splice(this.free.indexOf(light), 1);
@@ -92,13 +98,18 @@ export class ExplosionPool extends ObjectPool {
 
     spawnBoom(pos, scale = 1) {
         const colors = [0xffaa22, 0xff6600, 0xffee88, 0xff3300];
-        const budget = Math.max(4, this.boomParticleCount ?? 8);
+        const budget = Math.max(3, this.boomParticleCount ?? 8);
         const n = Math.min(budget, this.free.length);
         const smokeFrom = Math.max(2, Math.floor(n * 0.7));
         for (let i = 0; i < n; i++) {
             const mesh = this._takeMesh();
             if (!mesh) continue;
             const isSmoke = i >= smokeFrom;
+            this._scratchVel.set(
+                (Math.random() - 0.5) * 36 * scale,
+                Math.random() * 26 * scale,
+                (Math.random() - 0.5) * 36 * scale
+            );
             this._activate(mesh, pos, {
                 type: 'boom',
                 life: isSmoke ? 0.9 : 0.55,
@@ -108,11 +119,7 @@ export class ExplosionPool extends ObjectPool {
                 color: isSmoke ? 0x333333 : colors[i % 4],
                 opacity: isSmoke ? 0.28 : 1,
                 blending: isSmoke ? THREE.NormalBlending : THREE.AdditiveBlending,
-                vel: new THREE.Vector3(
-                    (Math.random() - 0.5) * 36 * scale,
-                    Math.random() * 26 * scale,
-                    (Math.random() - 0.5) * 36 * scale
-                ),
+                vel: this._scratchVel,
             });
         }
 
@@ -143,12 +150,13 @@ export class ExplosionPool extends ObjectPool {
     }
 
     spawnTrail(pos, isMissile = false) {
-        if (this.active.length > this.maxTrailParticles + 40) return;
+        if (this.active.length > this.maxTrailParticles + 24) return;
         const mesh = this._takeMesh();
         if (!mesh) return;
+        this._scratchVel.set((Math.random() - 0.5) * 0.12, 0.08, (Math.random() - 0.5) * 0.12);
         this._activate(mesh, pos, {
             type: 'trail',
-            life: isMissile ? 0.45 : 0.55,
+            life: isMissile ? 0.4 : 0.5,
             drag: 0.96,
             grow: 0.18,
             scale: isMissile ? 0.08 : 0.1,
@@ -156,13 +164,21 @@ export class ExplosionPool extends ObjectPool {
             opacity: isMissile ? 0.18 : 0.22,
             blending: THREE.NormalBlending,
             fadeNear: true,
-            vel: new THREE.Vector3((Math.random() - 0.5) * 0.12, 0.08, (Math.random() - 0.5) * 0.12),
+            vel: this._scratchVel,
         });
     }
 
     spawnFlare(pos, vel) {
         const mesh = this._takeMesh();
         if (!mesh) return null;
+        if (vel) this._scratchVel.copy(vel);
+        else {
+            this._scratchVel.set(
+                (Math.random() - 0.5) * 18,
+                (Math.random() - 0.3) * 10,
+                (Math.random() - 0.5) * 18
+            );
+        }
         return this._activate(mesh, pos, {
             type: 'flare',
             life: 2.8,
@@ -171,27 +187,27 @@ export class ExplosionPool extends ObjectPool {
             scale: 0.55,
             color: 0xffaa33,
             opacity: 0.95,
-            vel: vel || new THREE.Vector3(
-                (Math.random() - 0.5) * 18,
-                (Math.random() - 0.3) * 10,
-                (Math.random() - 0.5) * 18
-            ),
+            vel: this._scratchVel,
         });
     }
 
     /** 低空海面白沫／水花。 */
     spawnSplash(pos, intensity = 1) {
-        const n = Math.min(3 + Math.floor(intensity * 4), this.free.length);
-        const offset = new THREE.Vector3();
+        const n = Math.min(2 + Math.floor(intensity * 3), this.free.length);
         for (let i = 0; i < n; i++) {
             const mesh = this._takeMesh();
             if (!mesh) continue;
-            offset.set(
+            this._scratchPos.set(
                 pos.x + (Math.random() - 0.5) * 6,
                 pos.y + 0.2 + Math.random() * 1.5,
                 pos.z + (Math.random() - 0.5) * 6
             );
-            this._activate(mesh, offset, {
+            this._scratchVel.set(
+                (Math.random() - 0.5) * 12,
+                4 + Math.random() * 14 * intensity,
+                (Math.random() - 0.5) * 12
+            );
+            this._activate(mesh, this._scratchPos, {
                 type: 'boom',
                 life: 0.35 + Math.random() * 0.25,
                 drag: 0.92,
@@ -200,11 +216,7 @@ export class ExplosionPool extends ObjectPool {
                 color: 0xe8f4ff,
                 opacity: 0.55,
                 blending: THREE.AdditiveBlending,
-                vel: new THREE.Vector3(
-                    (Math.random() - 0.5) * 12,
-                    4 + Math.random() * 14 * intensity,
-                    (Math.random() - 0.5) * 12
-                ),
+                vel: this._scratchVel,
             });
         }
     }
@@ -233,10 +245,16 @@ export class ExplosionPool extends ObjectPool {
                                 : 0.5
                 );
                 if (p.fadeNear) {
-                    const dCam = obj.position.distanceTo(cameraPos);
-                    if (dCam < 18) opac *= Math.max(0, (dCam - 8) / 10);
-                    const dJet = obj.position.distanceTo(playerPos);
-                    if (dJet < 8) opac *= Math.max(0, (dJet - 3) / 5);
+                    const dCamSq = obj.position.distanceToSquared(cameraPos);
+                    if (dCamSq < 324) {
+                        const dCam = Math.sqrt(dCamSq);
+                        opac *= Math.max(0, (dCam - 8) / 10);
+                    }
+                    const dJetSq = obj.position.distanceToSquared(playerPos);
+                    if (dJetSq < 64) {
+                        const dJet = Math.sqrt(dJetSq);
+                        opac *= Math.max(0, (dJet - 3) / 5);
+                    }
                 }
                 obj.material.opacity = Math.max(0, opac);
                 if (p.type === 'boom' || p.type === 'trail' || p.type === 'flare') {

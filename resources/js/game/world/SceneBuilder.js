@@ -127,6 +127,13 @@ export class SceneBuilder {
         this.cloudUpdateStride = 1;
         /** 高度霧重算最小高度差（公尺）；飛行中可加大 */
         this.fogAltitudeEpsilon = 2;
+        /** 遠雲相對 stride 的略過倍率（飛行／盤旋） */
+        this.cloudFarSkipMul = 2;
+        /** 遠距巡邏編隊位置更新步幅 */
+        this.distantCraftStride = 1;
+        /** 盤旋時額外 stride 倍率（由 GameCore 動態寫入） */
+        this.orbitStrideBoost = 1;
+        this._cloudTick = 0;
         scene.add(this.decor);
     }
 
@@ -563,7 +570,9 @@ export class SceneBuilder {
         }
 
         this._cloudTick = (this._cloudTick | 0) + 1;
-        const stride = Math.max(1, this.cloudUpdateStride | 0);
+        const orbitBoost = Math.max(1, this.orbitStrideBoost | 0);
+        const stride = Math.max(1, (this.cloudUpdateStride | 0) * orbitBoost);
+        const farMul = Math.max(2, this.cloudFarSkipMul | 0);
         const doCloudVisual = (this._cloudTick % stride) === 0;
         const camPos = camera?.position;
         for (const cg of this.cloudGroups) {
@@ -572,14 +581,18 @@ export class SceneBuilder {
 
             if (!doCloudVisual) continue;
 
-            // 遠雲再降頻：近雲依 stride，遠雲約 2×stride
+            // 遠雲再降頻：近雲依 stride，遠雲約 farMul×stride；極遠直接跳過 billboard
             let near = true;
+            let veryFar = false;
             if (camPos) {
                 const dx = cg.position.x - camPos.x;
                 const dz = cg.position.z - camPos.z;
-                near = (dx * dx + dz * dz) < 900000; // ~950m
+                const d2 = dx * dx + dz * dz;
+                near = d2 < 900000; // ~950m
+                veryFar = d2 > 3600000; // ~1900m
             }
-            if (!near && (this._cloudTick % (stride * 2)) !== 0) continue;
+            if (veryFar) continue;
+            if (!near && (this._cloudTick % (stride * farMul)) !== 0) continue;
 
             for (const child of cg.children) {
                 if (child.material?.uniforms?.uTime) {
@@ -594,10 +607,14 @@ export class SceneBuilder {
                 }
             }
         }
-        for (const form of this.distantCraft) {
-            form.position.z -= form.userData.speed * dt;
-            form.position.y += Math.sin(time * 0.4 + form.userData.phase) * 0.15;
-            if (form.position.z < -3200) form.position.z = 200;
+        const craftStride = Math.max(1, this.distantCraftStride | 0);
+        if ((this._cloudTick % craftStride) === 0) {
+            const craftDt = dt * craftStride;
+            for (const form of this.distantCraft) {
+                form.position.z -= form.userData.speed * craftDt;
+                form.position.y += Math.sin(time * 0.4 + form.userData.phase) * 0.15 * craftStride;
+                if (form.position.z < -3200) form.position.z = 200;
+            }
         }
         // 浮標動畫不需每幀；隔幀即可
         if ((this._cloudTick & 1) === 1) {

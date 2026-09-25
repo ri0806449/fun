@@ -181,6 +181,7 @@ export class GameCore {
             this._perfAcc.frame = 0;
             this._perfAcc.cloudDens = 0;
             this._perfAcc.fog = 0;
+            this._perfAcc.lock = 0;
         }
         this._activeBoomBudget = 0;
         this.stunts?.reset();
@@ -195,9 +196,16 @@ export class GameCore {
         this._tmp = new THREE.Vector3();
         this._tmp2 = new THREE.Vector3();
         this._tmp3 = new THREE.Vector3();
+        this._tmp4 = new THREE.Vector3();
+        this._gunRight = new THREE.Vector3();
+        this._gunUp = new THREE.Vector3(0, 1, 0);
         this._mslSteer = new THREE.Vector3();
         this._lockTargets = [];
+        this._radarContacts = [];
         this._cloudDensCache = 0;
+        this._baseBoomParticles = config.pools?.boom_particle_count ?? 8;
+        this._baseMaxTrail = config.pools?.max_trail_particles ?? 56;
+        this._baseCloudStride = 1;
         this._basePixelRatio = Math.min(
             typeof devicePixelRatio !== 'undefined' ? devicePixelRatio : 1,
             this.config.performance?.max_pixel_ratio ?? 1.5
@@ -245,6 +253,7 @@ export class GameCore {
             frame: 0,
             cloudDens: 0,
             fog: 0,
+            lock: 0,
         };
         this._activeBoomBudget = 0;
         this._lastWx = null;
@@ -283,7 +292,7 @@ export class GameCore {
         const env = this.config.environment ?? {};
 
         if (flying) {
-            const flightPr = perf.flight_max_pixel_ratio ?? 1.25;
+            const flightPr = perf.flight_max_pixel_ratio ?? 1.1;
             this.renderer.setPixelRatio(Math.min(
                 typeof devicePixelRatio !== 'undefined' ? devicePixelRatio : 1,
                 flightPr
@@ -292,33 +301,59 @@ export class GameCore {
             this.water.setReflectionInterval(
                 refl === undefined ? 0 : Math.max(0, refl | 0)
             );
-            this.sceneBuilder.cloudUpdateStride = Math.max(1, perf.flight_cloud_update_stride ?? 3);
-            this.sceneBuilder.fogAltitudeEpsilon = 8;
+            this.water.setUniformHz(perf.flight_water_uniform_hz ?? 12);
+            this._baseCloudStride = Math.max(1, perf.flight_cloud_update_stride ?? 5);
+            this.sceneBuilder.cloudUpdateStride = this._baseCloudStride;
+            this.sceneBuilder.cloudFarSkipMul = Math.max(2, perf.flight_cloud_far_skip_mul ?? 3);
+            this.sceneBuilder.distantCraftStride = Math.max(1, perf.flight_distant_craft_stride ?? 3);
+            this.sceneBuilder.orbitStrideBoost = 1;
+            this.sceneBuilder.fogAltitudeEpsilon = 10;
             this.audio.setEngineAudioCadence(
-                perf.flight_engine_audio_hz ?? 12,
-                perf.flight_engine_audio_epsilon ?? 0.012
+                perf.flight_engine_audio_hz ?? 8,
+                perf.flight_engine_audio_epsilon ?? 0.016
             );
+            this.audio.setGunAudioLayers(perf.flight_gun_audio_layers ?? 1);
             this.loop.setMaxDelta(perf.flight_max_delta ?? 0.04);
             if (this.terrain) {
-                this.terrain.losSamples = Math.max(4, perf.flight_los_samples ?? 10);
+                this.terrain.losSamples = Math.max(4, perf.flight_los_samples ?? 8);
             }
+            this.explosionPool.allowLights = perf.flight_explosion_lights === true;
+            this.explosionPool.boomParticleCount = Math.max(
+                3,
+                perf.combat_boom_particle_count ?? this._baseBoomParticles
+            );
+            this.explosionPool.maxTrailParticles = Math.max(
+                16,
+                perf.combat_max_trail_particles ?? this._baseMaxTrail
+            );
+            this.contrails.setSpawnIntervalMul(perf.flight_contrail_spawn_mul ?? 1.75);
             this._cloudDensCache = this.sceneBuilder.sampleCloudDensity(this.camera.position);
             if (this._perfAcc) {
                 this._perfAcc.cloudDens = 0;
                 this._perfAcc.fog = 0;
+                this._perfAcc.lock = 0;
             }
         } else {
             this.renderer.setPixelRatio(this._basePixelRatio);
             this.water.setReflectionInterval(
                 this._menuWaterReflectionInterval ?? env.water_reflection_interval ?? 3
             );
+            this.water.setUniformHz(0);
             this.sceneBuilder.cloudUpdateStride = 1;
+            this.sceneBuilder.cloudFarSkipMul = 2;
+            this.sceneBuilder.distantCraftStride = 1;
+            this.sceneBuilder.orbitStrideBoost = 1;
             this.sceneBuilder.fogAltitudeEpsilon = 2;
             this.audio.setEngineAudioCadence(0);
+            this.audio.setGunAudioLayers(2);
             this.loop.setMaxDelta(0.05);
             if (this.terrain) {
                 this.terrain.losSamples = this._defaultLosSamples;
             }
+            this.explosionPool.allowLights = true;
+            this.explosionPool.boomParticleCount = this._baseBoomParticles;
+            this.explosionPool.maxTrailParticles = this._baseMaxTrail;
+            this.contrails.setSpawnIntervalMul(1);
         }
     }
 
@@ -460,6 +495,7 @@ export class GameCore {
             this._perfAcc.frame = 0;
             this._perfAcc.cloudDens = 0;
             this._perfAcc.fog = 0;
+            this._perfAcc.lock = 0;
         }
         this.weather?.reset();
         this.stunts?.reset();
@@ -637,17 +673,18 @@ export class GameCore {
         const baseDir = this.player.getGunDirection();
         const count = this.runMods.spreadGun ? this.runMods.spreadCount : 1;
         const spread = this.runMods.spreadAngle;
-        const up = new THREE.Vector3(0, 1, 0);
-        const right = new THREE.Vector3().crossVectors(baseDir, up).normalize();
-        if (right.lengthSq() < 0.01) right.set(1, 0, 0);
+        this._gunRight.crossVectors(baseDir, this._gunUp);
+        if (this._gunRight.lengthSq() < 0.01) this._gunRight.set(1, 0, 0);
+        else this._gunRight.normalize();
 
         for (let i = 0; i < count; i++) {
-            const dir = baseDir.clone();
+            this._tmp4.copy(baseDir);
             if (count > 1) {
                 const t = (i / (count - 1)) - 0.5;
-                dir.addScaledVector(right, Math.sin(t * spread * 2) * 2).normalize();
+                this._tmp4.addScaledVector(this._gunRight, Math.sin(t * spread * 2) * 2).normalize();
             }
-            this.bulletPool.spawn(origin.clone(), this.player.quaternion, dir.multiplyScalar(gun.projectile_speed), {
+            this._tmp4.multiplyScalar(gun.projectile_speed);
+            this.bulletPool.spawn(origin, this.player.quaternion, this._tmp4, {
                 team: 'player',
                 life: gun.projectile_life,
                 damage: gun.damage * this.weaponPower * this._combatDamageMul(),
@@ -1321,7 +1358,8 @@ export class GameCore {
 
         const thr = this.player.throttle;
         this.trailAcc += dt;
-        const trailInterval = thr > 0.8 || this.player.boosting ? 0.14 : 0.22;
+        const trailMul = perf.flight_trail_interval_mul ?? 1.45;
+        const trailInterval = (thr > 0.8 || this.player.boosting ? 0.14 : 0.22) * trailMul;
         if (this.trailAcc > trailInterval && thr > 0.48) {
             this.trailAcc = 0;
             this.addContrail(
@@ -1356,7 +1394,25 @@ export class GameCore {
             this.player.getRollAmount(), this.player.telemetry.gApprox
         );
 
-        this.lockSnap = this.lockOn.update(dt, this._collectLockTargets(), this.player.position);
+        // 盤旋：相機高速轉向時加粗雲 billboard／遠距編隊更新
+        if (flying) {
+            const orbitRate = Math.abs(this.player.yawRate) + Math.abs(this.player.rollRate);
+            const orbitTh = perf.flight_orbit_yaw_threshold ?? 0.55;
+            const boost = orbitRate >= orbitTh
+                ? Math.max(1, perf.flight_orbit_cloud_stride_boost ?? 2)
+                : 1;
+            this.sceneBuilder.orbitStrideBoost = boost;
+        }
+
+        this._perfAcc.lock += dt;
+        const lockPeriod = flying
+            ? 1 / Math.max(1, perf.flight_lock_hz ?? 18)
+            : 0;
+        if (!flying || lockPeriod <= 0 || this._perfAcc.lock >= lockPeriod) {
+            const lockDt = this._perfAcc.lock > 0 ? this._perfAcc.lock : dt;
+            this._perfAcc.lock = 0;
+            this.lockSnap = this.lockOn.update(lockDt, this._collectLockTargets(), this.player.position);
+        }
         this.hud.setLock(this.lockSnap);
 
         this._missileSmokeInterval = perf.flight_missile_smoke_interval ?? 0.14;
@@ -1495,12 +1551,13 @@ export class GameCore {
         }
 
         this._perfAcc.radar += dt;
-        const radarPeriod = 1 / Math.max(1, perf.radar_hz ?? 12);
+        const radarPeriod = 1 / Math.max(1, perf.radar_hz ?? 8);
         if (this._perfAcc.radar >= radarPeriod) {
             this._perfAcc.radar = 0;
-            const radarContacts = this.boss?.alive
-                ? [...this.waves.enemies, this.boss]
-                : this.waves.enemies;
+            const radarContacts = this._radarContacts;
+            radarContacts.length = 0;
+            for (const e of this.waves.enemies) radarContacts.push(e);
+            if (this.boss?.alive) radarContacts.push(this.boss);
             this.radar.update(radarPeriod, this.player.root, radarContacts, this.route.waypoints, this.items);
         }
         this.updateCompass();

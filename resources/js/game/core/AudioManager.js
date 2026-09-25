@@ -276,8 +276,12 @@ export class AudioManager {
         /** @type {THREE.Scene|null} */
         this.scene = null;
 
-        /** 上一幀物件位置（都卜勒） */
+        /** 上一幀物件位置（都卜勒）— 複用 Vector3，避免每幀 clone */
         this._prevPos = new WeakMap();
+        this._missileSet = new Set();
+        this._enemyMeshSet = new Set();
+        /** 開火音效層數（飛行降載可設 1） */
+        this._gunAudioLayers = 2;
 
         /** @type {DynamicsCompressorNode|null} */
         this._compressor = null;
@@ -653,7 +657,9 @@ export class AudioManager {
         this._listenerPrev.copy(camPos);
 
         const missiles = ctx.missiles ?? [];
-        const missileSet = new Set(missiles);
+        const missileSet = this._missileSet;
+        missileSet.clear();
+        for (const m of missiles) missileSet.add(m);
         for (const [obj] of [...this._boundPos.entries()]) {
             if (obj.userData?.__audioKind === 'missile' && !missileSet.has(obj)) {
                 this.unbindPositional(obj);
@@ -676,7 +682,8 @@ export class AudioManager {
         }
 
         const enemies = ctx.enemies ?? [];
-        const enemyMeshes = new Set();
+        const enemyMeshes = this._enemyMeshSet;
+        enemyMeshes.clear();
         for (const e of enemies) {
             if (!e?.alive || !e.mesh) continue;
             enemyMeshes.add(e.mesh);
@@ -712,13 +719,17 @@ export class AudioManager {
     _applyDoppler(object, dt) {
         const sound = this._boundPos.get(object);
         if (!sound || !this.listener) return;
-        const prev = this._prevPos.get(object);
+        let prev = this._prevPos.get(object);
         if (!prev || dt <= 0) {
-            this._prevPos.set(object, object.position.clone());
+            if (!prev) {
+                prev = new THREE.Vector3();
+                this._prevPos.set(object, prev);
+            }
+            prev.copy(object.position);
             return;
         }
         this._srcVel.copy(object.position).sub(prev).multiplyScalar(1 / dt);
-        this._prevPos.set(object, object.position.clone());
+        prev.copy(object.position);
 
         const listenerPos = this.listener.parent?.position ?? this._listenerPrev;
         this._tmp.copy(object.position).sub(listenerPos);
@@ -899,19 +910,30 @@ export class AudioManager {
         }
     }
 
+    /**
+     * 開火音層數（1= thrump 單層；2+= 疊金屬）。
+     * @param {number} layers
+     */
+    setGunAudioLayers(layers) {
+        this._gunAudioLayers = Math.max(1, layers | 0);
+    }
+
     gun() {
         const vol = this.cfg.gun_volume ?? 1.05;
-        // 可重疊短樣本：主層 thrump＋輕金屬層
+        const layers = this._gunAudioLayers ?? 2;
+        // 可重疊短樣本：主層 thrump；（可選）輕金屬層
         this.play('gun', {
             volume: vol,
             playbackRate: 0.88 + Math.random() * 0.22,
             lowShelf: 6.5,
         });
-        this.play('gun', {
-            volume: vol * 0.38,
-            playbackRate: 1.05 + Math.random() * 0.18,
-            lowShelf: 3.5,
-        });
+        if (layers >= 2) {
+            this.play('gun', {
+                volume: vol * 0.38,
+                playbackRate: 1.05 + Math.random() * 0.18,
+                lowShelf: 3.5,
+            });
+        }
         if (this.missing.has('gun')) this._proc.heavyGun();
     }
 

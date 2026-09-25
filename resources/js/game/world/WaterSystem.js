@@ -82,6 +82,11 @@ export class WaterSystem {
         this._reflectionInterval = Math.max(0, cfg.water_reflection_interval ?? 2);
         this._reflectionFrame = 0;
         this._reflectionEnabled = this._reflectionInterval > 0;
+        /** 0 = 每幀更新 uniform；>0 為 Hz 上限（飛行降載） */
+        this._uniformHz = 0;
+        this._uniformAcc = 0;
+        this._pendingCam = null;
+        this._pendingSun = null;
 
         if (typeof this.water.onBeforeRender === 'function') {
             const original = this.water.onBeforeRender;
@@ -108,6 +113,15 @@ export class WaterSystem {
         if (n > 0) this._reflectionFrame = 0;
     }
 
+    /**
+     * 限制 time／eye／sun uniform 寫入頻率（反射關閉後仍有開銷）。
+     * @param {number} hz 0 = 每幀
+     */
+    setUniformHz(hz) {
+        this._uniformHz = Math.max(0, hz | 0);
+        this._uniformAcc = 0;
+    }
+
     /** 水面高度（與碰撞／飛沫對齊）。 */
     get level() {
         return this.water.position.y;
@@ -119,6 +133,25 @@ export class WaterSystem {
      * @param {THREE.Vector3} [sunDir]
      */
     update(time, cameraPos, sunDir = null) {
+        const hz = this._uniformHz;
+        if (hz > 0) {
+            // 累積由呼叫端以固定 timestep 近似；此處用簡易隔幀：僅當 acc 歸零才寫
+            this._uniformAcc += 1;
+            const period = Math.max(1, Math.round(60 / hz));
+            if (this._uniformAcc < period) {
+                this._pendingCam = cameraPos;
+                this._pendingSun = sunDir;
+                return;
+            }
+            this._uniformAcc = 0;
+        }
+
+        this._applyUniforms(time, cameraPos ?? this._pendingCam, sunDir ?? this._pendingSun);
+        this._pendingCam = null;
+        this._pendingSun = null;
+    }
+
+    _applyUniforms(time, cameraPos, sunDir) {
         this._time = time;
         const mat = this.water.material;
         if (!mat?.uniforms) return;

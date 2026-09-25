@@ -54,6 +54,9 @@ export class PlayerJet {
         this._fwd = new THREE.Vector3();
         this._right = new THREE.Vector3();
         this._worldUp = new THREE.Vector3(0, 1, 0);
+        this._gunOrigin = new THREE.Vector3();
+        this._gunDir = new THREE.Vector3();
+        this._missileOrigin = new THREE.Vector3();
     }
 
     get position() { return this.root.position; }
@@ -116,15 +119,15 @@ export class PlayerJet {
     }
 
     getGunOrigin() {
-        return new THREE.Vector3(0, 0, -4.5).applyMatrix4(this.root.matrixWorld);
+        return this._gunOrigin.set(0, 0, -4.5).applyMatrix4(this.root.matrixWorld);
     }
 
     getGunDirection() {
-        return new THREE.Vector3(0, 0, -1).applyQuaternion(this.root.quaternion);
+        return this._gunDir.set(0, 0, -1).applyQuaternion(this.root.quaternion);
     }
 
     getMissileOrigin() {
-        return new THREE.Vector3(1.2, -0.3, -0.5).applyMatrix4(this.root.matrixWorld);
+        return this._missileOrigin.set(1.2, -0.3, -0.5).applyMatrix4(this.root.matrixWorld);
     }
 
     /** 純鍵盤：W/S 俯仰、A/D 滾轉、Q/E 方向舵、Shift/Ctrl 油門。 */

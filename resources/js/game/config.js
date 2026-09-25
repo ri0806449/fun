@@ -241,41 +241,66 @@ export const DEFAULTS = Object.freeze({
     /**
      * 幀率降載：非關鍵系統降頻、像素比上限。
      * flight_* 僅在 PLAYING 套用；不影響 PostFx 安全預設（grade／HDR 仍關閉）。
+     * 戰鬥／盤旋另壓鎖定、雲 billboard、爆炸燈與開火音層數。
      */
     performance: {
         max_pixel_ratio: 1.5,
         antialias: true,
-        radar_hz: 12,
-        world_hud_hz: 20,
-        weather_hz: 5,
-        hud_bars_hz: 15,
-        spatial_audio_hz: 20,
+        radar_hz: 8,
+        world_hud_hz: 10,
+        weather_hz: 4,
+        hud_bars_hz: 10,
+        spatial_audio_hz: 10,
         ai_far_skip_frames: 1,
-        ai_far_distance: 420,
-        max_simultaneous_booms: 4,
+        ai_far_distance: 400,
+        max_simultaneous_booms: 3,
         ambient_boom_enabled: false,
         /** 飛行中像素比上限（進關時套用，出關還原） */
-        flight_max_pixel_ratio: 1.25,
+        flight_max_pixel_ratio: 1.1,
         /** 飛行中水面反射隔幀（0=完全關閉反射重繪） */
         flight_water_reflection_interval: 0,
         /** 飛行中雲 billboard／uniforms 每 N 幀更新一次 */
-        flight_cloud_update_stride: 3,
+        flight_cloud_update_stride: 5,
         /** 穿雲密度採樣 Hz */
-        flight_cloud_density_hz: 8,
+        flight_cloud_density_hz: 4,
         /** 高度霧重算 Hz */
-        flight_fog_hz: 6,
+        flight_fog_hz: 4,
         /** 引擎／風切／加力音參數更新 Hz（避免 WebAudio thrashing） */
-        flight_engine_audio_hz: 12,
+        flight_engine_audio_hz: 8,
         /** 音量／pitch 變更門檻（低於此不呼叫 setVolume／setPlaybackRate） */
-        flight_engine_audio_epsilon: 0.012,
+        flight_engine_audio_epsilon: 0.016,
         /** 飛行中飛彈地形 LOS 採樣數（覆寫 terrain.los_samples） */
-        flight_los_samples: 10,
+        flight_los_samples: 8,
         /** 飛行中飛彈煙跡最小生成間隔（秒） */
-        flight_missile_smoke_interval: 0.14,
+        flight_missile_smoke_interval: 0.22,
         /** 飛行中遠距 AI 隔幀略過數（較大＝更省） */
-        flight_ai_far_skip_frames: 2,
+        flight_ai_far_skip_frames: 3,
         /** dt 夾制上限（秒）；過大 spike 會放大頓感 */
         flight_max_delta: 0.04,
+        /** 鎖定錐／LOS 更新 Hz */
+        flight_lock_hz: 18,
+        /** 開火音效層數（1=單層，2=疊金屬層） */
+        flight_gun_audio_layers: 1,
+        /** 飛行中是否啟用爆炸 PointLight（Standard 材質重算很貴） */
+        flight_explosion_lights: false,
+        /** 飛行中水面 time／eye uniform 更新 Hz */
+        flight_water_uniform_hz: 12,
+        /** 翼尖凝結跡生成間隔倍率（>1 更稀） */
+        flight_contrail_spawn_mul: 1.75,
+        /** 引擎尾煙間隔倍率 */
+        flight_trail_interval_mul: 1.45,
+        /** 盤旋判定：|yaw|+|roll| 超過此值加粗雲更新 */
+        flight_orbit_yaw_threshold: 0.55,
+        /** 盤旋時雲 stride 再乘此倍率 */
+        flight_orbit_cloud_stride_boost: 2,
+        /** 遠距巡邏編隊位置更新步幅 */
+        flight_distant_craft_stride: 3,
+        /** 遠雲相對 stride 的略過倍率 */
+        flight_cloud_far_skip_mul: 3,
+        /** 戰鬥中單次爆炸 mesh 粒子數上限 */
+        combat_boom_particle_count: 5,
+        /** 戰鬥中煙跡粒子上限 */
+        combat_max_trail_particles: 32,
     },
     terrain: {
         size: 3200,
@@ -419,16 +444,16 @@ export const DEFAULTS = Object.freeze({
         // 預設 LDR composer（僅 RenderPass）；force_hdr 才開 bloom／OutputPass
         force_hdr: false,
         composer_enabled: true,
-        contrail_capacity: 48,
-        contrail_g_threshold: 2.2,
-        contrail_interval: 0.06,
+        contrail_capacity: 40,
+        contrail_g_threshold: 2.35,
+        contrail_interval: 0.08,
     },
     pools: {
         bullets: 180,
         missiles: 36,
-        explosions: 72,
-        max_trail_particles: 56,
-        boom_particle_count: 8,
+        explosions: 64,
+        max_trail_particles: 40,
+        boom_particle_count: 5,
     },
     scoring: {
         waypoint: 200,

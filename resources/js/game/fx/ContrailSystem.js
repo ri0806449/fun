@@ -14,6 +14,7 @@ export class ContrailSystem {
         this.capacity = opts.capacity ?? 64;
         this.gThreshold = opts.g_threshold ?? 2.2;
         this.spawnInterval = opts.spawn_interval ?? 0.045;
+        this._baseSpawnInterval = this.spawnInterval;
         this.acc = 0;
         this._tmp = new THREE.Vector3();
         this._tmp2 = new THREE.Vector3();
@@ -36,6 +37,15 @@ export class ContrailSystem {
             scene.add(mesh);
             this.free.push(mesh);
         }
+    }
+
+    /**
+     * 飛行降載：拉長生成間隔（倍率 >1 更稀）。
+     * @param {number} mul
+     */
+    setSpawnIntervalMul(mul) {
+        const m = Math.max(0.5, mul || 1);
+        this.spawnInterval = this._baseSpawnInterval * m;
     }
 
     /**
