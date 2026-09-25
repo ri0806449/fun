@@ -176,11 +176,35 @@ class GameConfigTest extends TestCase
 
         foreach ([
             'sky_turbidity', 'sky_rayleigh', 'sky_mie_coefficient', 'sky_elevation', 'sky_azimuth',
-            'sun_intensity', 'ambient_intensity', 'hemisphere_intensity',
+            'sky_scale', 'camera_far', 'sun_intensity', 'ambient_intensity', 'hemisphere_intensity',
             'water_level', 'water_wave_speed', 'water_wind_deg', 'cloud_quality', 'cloud_shake',
+            'crash_altitude', 'keel_offset', 'sea_spray_altitude',
         ] as $key) {
             $this->assertArrayHasKey($key, $env, "缺少 environment.{$key}");
         }
+
+        $this->assertGreaterThan(0, $env['sky_scale'], 'sky_scale 應為正');
+        // PHPUnit: assertGreaterThan($expected, $actual) ⇒ $actual > $expected
+        $this->assertGreaterThan(
+            $env['sky_scale'] / 2,
+            $env['camera_far'],
+            'camera_far 須大於天穹半邊長，否則跟隨相機後仍會裁掉天空'
+        );
+
+        $this->assertLessThanOrEqual(0.5, $env['crash_altitude'], '撞海門檻應對機腹、允許掠海');
+        $this->assertLessThan(0.0, $env['keel_offset'], 'keel_offset 應為負（機腹在 pivot 下方）');
+        $this->assertArrayHasKey('water_collision_ceil', $config['terrain']);
+        $this->assertArrayHasKey('player_contact_pad', $config['terrain']);
+        $this->assertArrayHasKey('player_terrain_collision', $config['terrain']);
+        $this->assertArrayHasKey('sea_visual_clearance', $config['terrain']);
+        $this->assertFalse($config['terrain']['player_terrain_collision'], '街機預設關閉玩家高度圖撞山');
+        $this->assertGreaterThan(0, $config['terrain']['min_height']);
+        $this->assertGreaterThanOrEqual(
+            $config['terrain']['min_height'],
+            $config['terrain']['water_collision_ceil'],
+            '近海面 ceil 應涵蓋谷底高度'
+        );
+        $this->assertGreaterThanOrEqual(8.0, $config['terrain']['sea_visual_clearance'], '離海餘裕應足以避免誤殺');
 
         $this->assertGreaterThan(0, $env['water_wave_speed']);
         $this->assertFalse($env['lensflare_enabled'], '預設關閉 lensflare 避免直視刺眼');

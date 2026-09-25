@@ -206,7 +206,10 @@ return [
 
     'environment' => [
         'sea_spray_altitude' => 15.0,
-        'crash_altitude' => 2.0,
+        // 機腹世界 Y 低於此值才 WATER IMPACT（非 pivot；街機可掠海）
+        'crash_altitude' => -0.5,
+        // 機腹相對 pivot 的 Y（與玩家機 bbox.min.y ≈ -1.32 對齊）
+        'keel_offset' => -1.35,
         'island_count' => 4,
         'cloud_count' => 18,
         'cloud_quality' => 0, // 0=低 1=中 2=高（雲解析度／塊數倍率）
@@ -221,6 +224,8 @@ return [
         'sky_elevation' => 8.0,
         'sky_azimuth' => 185.0,
         'sky_scale' => 4500.0,
+        // 透視相機 far（須大於 sky_scale/2；天穹每幀跟隨相機）
+        'camera_far' => 6075.0,
         // Sky.js showSunDisc 倍率（0=無太陽盤，1=預設刺眼；再大幅下修）
         'sky_sun_disc' => 0.06,
         'lensflare_enabled' => false,
@@ -256,6 +261,14 @@ return [
         'min_height' => 2.0,
         'seed' => 4242,
         'collision_clearance' => 3.2,
+        // 高度圖 ≤ 此值視為近海／坡岸（若啟用玩家撞山）
+        'water_collision_ceil' => 40.0,
+        // 街機：關閉玩家高度圖撞山，僅水面機腹判定（避免看海撞隱形坡）
+        'player_terrain_collision' => false,
+        'sea_visual_clearance' => 10.0,
+        'water_level' => 0.0,
+        'player_contact_pad' => 0.35,
+        'keel_offset' => -1.35,
         'collision_damage' => 100.0,
         'los_samples' => 24,
         'los_clearance' => 6.0,

@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { createSimplex, fbm2D } from '../utils/noise.js';
+import { evaluateTerrainCrash } from '../flight/terrainCollision.js';
 
 /**
  * TerrainSystem — 程序化高度圖山脈／峽谷。
@@ -19,6 +20,15 @@ export class TerrainSystem {
         this.maxHeight = cfg.max_height ?? 190;
         this.minHeight = cfg.min_height ?? 2;
         this.collisionClearance = cfg.collision_clearance ?? 3.2;
+        // 低於此高度圖視為近海／坡岸：不判地形撞毀（改由水面機腹）
+        this.waterCollisionCeil = cfg.water_collision_ceil ?? 40;
+        // 玩家機腹接觸容差（非 pivot clearance）
+        this.playerContactPad = cfg.player_contact_pad ?? 0.35;
+        this.keelOffset = cfg.keel_offset ?? -1.35;
+        // 街機預設關閉玩家高度圖撞山（僅水面機腹）；避免看海撞隱形坡
+        this.playerTerrainCollision = cfg.player_terrain_collision === true;
+        this.waterLevel = cfg.water_level ?? 0;
+        this.seaVisualClearance = cfg.sea_visual_clearance ?? 10;
         this.losSamples = cfg.los_samples ?? 24;
         this.losClearance = cfg.los_clearance ?? 6;
         this.seed = cfg.seed ?? 4242;
@@ -184,12 +194,65 @@ export class TerrainSystem {
     }
 
     /**
-     * 與地形碰撞：true = 撞擊。
+     * 投射物／通用碰撞：pivot（或點）+ clearance。
+     * 近海面高度圖不判（避免海面誤爆）；真正山體仍用 clearance。
      * @param {THREE.Vector3} pos
      * @param {number} [clearance]
      */
     collides(pos, clearance = this.collisionClearance) {
-        return pos.y < this.sampleHeight(pos.x, pos.z) + clearance;
+        const h = this.sampleHeight(pos.x, pos.z);
+        if (h <= this.waterCollisionCeil) return false;
+        return pos.y < h + clearance;
+    }
+
+    /**
+     * 玩家機體碰撞：機腹接觸抬升地形才算撞山。
+     * @param {THREE.Vector3} pos
+     * @param {{ keelOffset?: number, contactPad?: number }} [opts]
+     */
+    collidesPlayer(pos, opts = {}) {
+        const h = this.sampleHeight(pos.x, pos.z);
+        return evaluateTerrainCrash(pos.y, h, {
+            playerTerrainCollision: opts.playerTerrainCollision ?? this.playerTerrainCollision,
+            waterLevel: this.waterLevel,
+            seaVisualClearance: this.seaVisualClearance,
+            waterCollisionCeil: this.waterCollisionCeil,
+            keelOffset: opts.keelOffset ?? this.keelOffset,
+            contactPad: opts.contactPad ?? this.playerContactPad,
+        }).crash;
+    }
+
+    /**
+     * 除錯用：回傳玩家碰撞相關採樣。
+     * @param {THREE.Vector3} pos
+     * @param {{ keelOffset?: number }} [opts]
+     */
+    playerCrashProbe(pos, opts = {}) {
+        const h = this.sampleHeight(pos.x, pos.z);
+        const keelOffset = opts.keelOffset ?? this.keelOffset;
+        const ev = evaluateTerrainCrash(pos.y, h, {
+            playerTerrainCollision: this.playerTerrainCollision,
+            waterLevel: this.waterLevel,
+            seaVisualClearance: this.seaVisualClearance,
+            waterCollisionCeil: this.waterCollisionCeil,
+            keelOffset,
+            contactPad: this.playerContactPad,
+        });
+        return {
+            terrainHeight: h,
+            radarAlt: ev.radarAlt,
+            keelY: ev.keelY,
+            keelOffset,
+            waterCollisionCeil: this.waterCollisionCeil,
+            contactPad: this.playerContactPad,
+            terrainCrash: ev.crash,
+            exemptWater: ev.exemptWater,
+            exemptSeaClearance: ev.exemptSeaClearance,
+            exemptDisabled: ev.exemptDisabled,
+            playerTerrainCollision: this.playerTerrainCollision,
+            seaVisualClearance: this.seaVisualClearance,
+            clearance: this.collisionClearance,
+        };
     }
 
     /**

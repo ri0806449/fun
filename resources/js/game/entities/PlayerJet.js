@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { MathUtils } from 'three';
 import { FlightModel } from '../flight/FlightModel.js';
 import { computeArcadeRateTargets } from '../flight/ArcadeAssist.js';
+import { evaluateSeaAltitude } from '../flight/seaAltitude.js';
 import { createJet, PLAYER_PALETTE } from './JetFactory.js';
 import { approach } from '../utils/math.js';
 import { updateHeatHaze } from '../fx/HeatHaze.js';
@@ -21,6 +22,7 @@ export class PlayerJet {
         this.startPos = new THREE.Vector3(0, config.player.start_altitude, 100);
         this.startSpeed = config.player.start_speed;
         this.maxHp = config.player.max_hp;
+        // crash_altitude：機腹（keel）世界 Y 門檻，非 pivot（見 seaAltitude.js）
         this.crashAltitude = config.environment.crash_altitude;
         this.sprayAltitude = config.environment.sea_spray_altitude;
         this.boostDuration = config.flight.boost_duration;
@@ -42,6 +44,10 @@ export class PlayerJet {
         scene.add(this.root);
 
         this.parts = this.mesh.userData.parts ?? {};
+        const envKeel = config.environment.keel_offset;
+        this.keelOffset = Number.isFinite(envKeel)
+            ? envKeel
+            : (this.mesh.userData.keelOffset ?? -1.35);
         this._meshBasePos = this.mesh.position.clone();
         this._noise = createSimplex(5107);
         this._surf = { aileron: 0, elevator: 0, nozzle: 1 };
@@ -230,17 +236,15 @@ export class PlayerJet {
         );
     }
 
-    /** @returns {{ waterCrash:boolean, lowAlt:boolean, foam:number }} */
+    /** @returns {{ waterCrash:boolean, lowAlt:boolean, foam:number, keelY:number }} */
     updatePhysics(dt) {
         this.telemetry = this.model.integrate(dt, this.root, this.velocity, this.throttle, this.boosting);
 
-        const y = this.root.position.y;
-        if (y < this.crashAltitude) return { waterCrash: true, lowAlt: true, foam: 1 };
-        if (y < this.sprayAltitude) {
-            const span = Math.max(0.001, this.sprayAltitude - this.crashAltitude);
-            return { waterCrash: false, lowAlt: true, foam: (this.sprayAltitude - y) / span };
-        }
-        return { waterCrash: false, lowAlt: false, foam: 0 };
+        return evaluateSeaAltitude(this.root.position.y, {
+            crashAltitude: this.crashAltitude,
+            sprayAltitude: this.sprayAltitude,
+            keelOffset: this.keelOffset,
+        });
     }
 
     /**

@@ -230,7 +230,10 @@ export const DEFAULTS = Object.freeze({
     },
     environment: {
         sea_spray_altitude: 15,
-        crash_altitude: 2,
+        // 機腹世界 Y 低於此值才 WATER IMPACT（允許 pivot 離水面明顯距離平飛）
+        crash_altitude: -0.5,
+        // 機腹相對 pivot 的 Y（與 JetFactory bbox.min.y 對齊；可覆寫）
+        keel_offset: -1.35,
         island_count: 4,
         cloud_count: 18,
         cloud_quality: 0,
@@ -245,6 +248,8 @@ export const DEFAULTS = Object.freeze({
         sky_elevation: 8.0,
         sky_azimuth: 185,
         sky_scale: 4500,
+        /** 透視相機 far；須 > sky_scale/2（天穹跟隨相機後的盒面距離） */
+        camera_far: 6075,
         sky_sun_disc: 0.06,
         lensflare_enabled: false,
         lensflare_scale: 0.25,
@@ -340,6 +345,17 @@ export const DEFAULTS = Object.freeze({
         min_height: 2,
         seed: 4242,
         collision_clearance: 3.2,
+        // 高度圖 ≤ 此值視為近海／坡岸（若啟用玩家撞山）
+        water_collision_ceil: 40,
+        // 街機：關閉玩家高度圖撞山，僅水面機腹判定（避免看海撞隱形坡）
+        player_terrain_collision: false,
+        // 若啟用撞山：pivot 高於水面此距離則不判地形
+        sea_visual_clearance: 10,
+        water_level: 0,
+        // 玩家機腹接觸抬升地形的容差
+        player_contact_pad: 0.35,
+        // 與 environment.keel_offset 同步（TerrainSystem 預設）
+        keel_offset: -1.35,
         collision_damage: 100,
         los_samples: 24,
         los_clearance: 6,

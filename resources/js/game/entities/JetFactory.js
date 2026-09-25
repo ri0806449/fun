@@ -560,6 +560,9 @@ function buildPlayerJet(jet, palette) {
     }
 
     jet.rotation.y = Math.PI;
+    // 機腹相對 pivot 的最低 Y（供水面撞海判定；略取整避免浮點抖動）
+    const keelBox = new THREE.Box3().setFromObject(jet);
+    jet.userData.keelOffset = Math.round(keelBox.min.y * 100) / 100;
     jet.userData.classType = null;
     jet.userData.parts = parts;
     return jet;

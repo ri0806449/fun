@@ -36,7 +36,7 @@ import { AchievementTracker } from '../meta/AchievementTracker.js';
 import { RadioChatter } from '../hud/RadioChatter.js';
 import { WeatherSystem } from '../world/WeatherSystem.js';
 import { StuntScoring } from '../scoring/StuntScoring.js';
-import { clampToneMappingExposure } from '../world/atmosphereLimits.js';
+import { clampToneMappingExposure, cameraFarForSky } from '../world/atmosphereLimits.js';
 import { createWebGLRenderer, disposeContainerCanvases } from '../utils/createWebGLRenderer.js';
 
 /**
@@ -225,13 +225,22 @@ export class GameCore {
     _initRenderer() {
         this.scene = new THREE.Scene();
         // 霧密度由 SceneBuilder 依高度動態調整
-        this.scene.fog = new THREE.FogExp2(0x1c456e, this.config.environment?.fog_density ?? 0.00048);
+        const fogDens = this.config.environment?.fog_density ?? 0.00048;
+        this.scene.fog = new THREE.FogExp2(0x1c456e, fogDens);
+        // 天穹短暫不可見時的 fallback（勿用預設黑清色，否則直飛穿出會瞬間黑屏）
+        this.scene.background = new THREE.Color(0x1c456e);
 
+        const skyScale = this.config.environment?.sky_scale ?? 4500;
+        const camFar = Math.max(
+            this.config.hud?.camera?.far ?? 0,
+            this.config.environment?.camera_far ?? 0,
+            cameraFarForSky(skyScale)
+        );
         this.camera = new THREE.PerspectiveCamera(
             this.config.hud.base_fov,
             innerWidth / innerHeight,
             0.4,
-            5500
+            camFar
         );
 
         this.renderer = createWebGLRenderer(this.container, {
@@ -593,6 +602,45 @@ export class GameCore {
         });
         this.setState(GameState.GAMEOVER);
         this.submitScore();
+    }
+
+    /**
+     * 記錄撞毀當下遙測（瀏覽器 CDP／除錯用）。
+     * @param {string} outcome
+     * @param {{ keelY?: number, waterCrash?: boolean }} [phys]
+     */
+    _recordCrashDebug(outcome, phys = {}) {
+        const pos = this.player.position;
+        const probe = this.terrain.playerCrashProbe(pos, {
+            keelOffset: this.player.keelOffset,
+        });
+        const snapshot = {
+            outcome,
+            pivotY: pos.y,
+            x: pos.x,
+            z: pos.z,
+            keelY: phys.keelY ?? probe.keelY,
+            keelOffset: this.player.keelOffset,
+            terrainHeight: probe.terrainHeight,
+            radarAlt: probe.radarAlt,
+            clearance: probe.clearance,
+            waterCollisionCeil: probe.waterCollisionCeil,
+            contactPad: probe.contactPad,
+            exemptWater: probe.exemptWater,
+            exemptSeaClearance: probe.exemptSeaClearance,
+            exemptDisabled: probe.exemptDisabled,
+            playerTerrainCollision: probe.playerTerrainCollision,
+            seaVisualClearance: probe.seaVisualClearance,
+            terrainCrash: probe.terrainCrash,
+            waterCrash: !!phys.waterCrash,
+            crashAltitude: this.player.crashAltitude,
+            t: this.elapsed,
+        };
+        this.lastCrashDebug = snapshot;
+        if (typeof window !== 'undefined') {
+            window.__lastCrashDebug = snapshot;
+        }
+        return snapshot;
     }
 
     /** 上傳成績；任何失敗都靜默降級。 */
@@ -1299,14 +1347,18 @@ export class GameCore {
         const phys = this.player.updatePhysics(dt);
 
         if (phys.waterCrash) {
+            this._recordCrashDebug(Outcome.WATER_IMPACT, phys);
             this.spawnExplosion(this.player.position.clone(), 2.8);
             this.player.mesh.visible = false;
             this.endGame(Outcome.WATER_IMPACT);
             return;
         }
 
-        // 地形撞擊：heightmap 採樣
-        if (this.terrain.collides(this.player.position)) {
+        // 地形撞擊：機腹接觸抬升地形（近海面交由水面判定）
+        if (this.terrain.collidesPlayer(this.player.position, {
+            keelOffset: this.player.keelOffset,
+        })) {
+            this._recordCrashDebug(Outcome.TERRAIN_CRASH, phys);
             this.spawnExplosion(this.player.position.clone(), 2.6);
             this.player.mesh.visible = false;
             this.endGame(Outcome.TERRAIN_CRASH);
