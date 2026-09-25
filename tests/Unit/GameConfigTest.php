@@ -20,7 +20,7 @@ class GameConfigTest extends TestCase
     {
         $config = $this->config();
 
-        foreach (['mission', 'player', 'flight', 'weapons', 'enemy', 'enemies', 'boss', 'waves', 'environment', 'terrain', 'ground_defense', 'gpws', 'audio', 'visual', 'pools', 'pickups', 'hud', 'scoring', 'perks', 'meta', 'achievements'] as $section) {
+        foreach (['mission', 'player', 'flight', 'weapons', 'enemy', 'enemies', 'boss', 'waves', 'environment', 'terrain', 'ground_defense', 'gpws', 'audio', 'radio', 'weather', 'stunts', 'visual', 'pools', 'pickups', 'hud', 'scoring', 'perks', 'meta', 'achievements'] as $section) {
             $this->assertArrayHasKey($section, $config, "缺少設定區塊：{$section}");
         }
     }
@@ -180,4 +180,26 @@ class GameConfigTest extends TestCase
 
         $this->assertGreaterThan($enemy['hp'], $enemy['elite_hp']);
     }
+
+    public function test_weather_radio_stunts_keys_exist(): void
+    {
+        $config = $this->config();
+
+        $this->assertTrue($config['radio']['enabled']);
+        $this->assertGreaterThan(0, $config['radio']['cooldown']);
+
+        $weather = $config['weather'];
+        foreach (['dusk_at', 'rain_at', 'fog_mul_rain', 'rain_particles'] as $key) {
+            $this->assertArrayHasKey($key, $weather, "缺少 weather.{$key}");
+        }
+        $this->assertLessThan($weather['rain_at'], $weather['dusk_at']); // dusk_at < rain_at
+
+        $stunts = $config['stunts'];
+        foreach (['low_alt_agl', 'low_alt_hold', 'close_call_distance', 'close_call_score'] as $key) {
+            $this->assertArrayHasKey($key, $stunts, "缺少 stunts.{$key}");
+        }
+        $this->assertSame(20.0, (float) $stunts['low_alt_agl']);
+        $this->assertGreaterThan(0, $stunts['close_call_score']);
+    }
+
 }

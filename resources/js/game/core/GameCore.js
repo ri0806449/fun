@@ -33,6 +33,9 @@ import { PerkPool } from '../perks/PerkPool.js';
 import { RunModifiers } from '../perks/RunModifiers.js';
 import { MetaStore } from '../meta/MetaStore.js';
 import { AchievementTracker } from '../meta/AchievementTracker.js';
+import { RadioChatter } from '../hud/RadioChatter.js';
+import { WeatherSystem } from '../world/WeatherSystem.js';
+import { StuntScoring } from '../scoring/StuntScoring.js';
 
 /**
  * GameCore — 組裝場景、實體、HUD 與主迴圈，並持有遊戲狀態。
@@ -109,6 +112,15 @@ export class GameCore {
         });
         this.radar = new Radar(this.hud.el.radarCanvas, config.hud.radar_range);
 
+        this.weather = new WeatherSystem(this.scene, this.sceneBuilder, config.weather ?? {});
+        this.stunts = new StuntScoring(config.stunts ?? {});
+        this.radio = new RadioChatter(config.radio ?? {}, {
+            show: (callsign, line) => this.hud.showRadio(callsign, line),
+            hide: () => this.hud.hideRadio(),
+            speak: (line) => this.audio.speakRadio(line),
+        });
+
+
         this.perkPool = new PerkPool(config.perks);
         this.runMods = new RunModifiers(this.perkPool);
         this.metaStore = new MetaStore(config);
@@ -156,6 +168,9 @@ export class GameCore {
         this.radarAlt = 0;
         this.gpwsActive = false;
         this.gpwsAcc = 0;
+        this.weather?.reset();
+        this.stunts?.reset();
+        this.radio?.reset();
         /** @type {FlyingFortress|null} */
         this.boss = null;
         this.bossTriggered = false;
@@ -253,6 +268,7 @@ export class GameCore {
         this.hud.hideLoading();
         this.resetWorld();
         this.setState(GameState.PLAYING);
+        this.radio?.trigger('takeoff', { force: true });
     }
 
     restartGame() {
@@ -558,6 +574,7 @@ export class GameCore {
         this.achievements.noteKills(this.kills);
         this.waves.remove(enemy);
         this.addScore(Math.round(score * mul) + (elite ? this.config.scoring.elite_bonus : 0));
+        this.radio?.trigger('kill');
 
         if (this.runMods.lifestealHeal > 0) {
             this.player.heal(this.runMods.lifestealHeal);
@@ -606,6 +623,7 @@ export class GameCore {
         this.hud.showWaveToast('BOSS WARNING · FLYING FORTRESS');
         this.audio.bossWarn();
         this.audio.setBossBgm(true);
+        this.radio?.trigger('boss', { force: true });
     }
 
     _spawnBoss() {
@@ -1106,10 +1124,38 @@ export class GameCore {
             this.foamAcc = 0;
         }
 
+        // 天氣／特技／無線電
+        this.radio?.update(dt);
+        this.radio?.noteTime(this.missionTime);
+        const wx = this.weather?.update(
+            dt,
+            this.elapsed,
+            this.config.mission.time_limit,
+            this.camera
+        ) ?? { rainIntensity: 0, radarGlitch: false, phaseChanged: false, phase: 'clear' };
+        if (wx.phase === 'rain' && wx.phaseChanged) this.radio?.noteRainStart();
+        this.hud.setRainOverlay?.(wx.rainIntensity ?? 0);
+        this.hud.setRadarGlitch?.(!!wx.radarGlitch);
+
+        this.radarAlt = this.terrain.radarAltitude(this.player.position);
+        const stunt = this.stunts?.update(dt, {
+            agl: this.radarAlt,
+            playerPos: this.player.position,
+            enemies: this.waves.enemies,
+        }) ?? { scoreDelta: 0, lowAltActive: false, closeCall: false, windBoost: 0, foamBoost: 1, multiplier: 1 };
+        if (stunt.scoreDelta > 0) this.addScore(stunt.scoreDelta);
+        if (stunt.lowAltActive) this.radio?.noteLowAlt();
+        if (stunt.closeCall) this.radio?.trigger('close_call');
+        this.hud.setStuntBanner?.(stunt.lowAltActive, stunt.multiplier ?? 2);
+        if (stunt.lowAltActive && stunt.foamBoost > 1) {
+            this.foamAcc += dt * (stunt.foamBoost - 1);
+        }
+
         this.audio.setEngine(this.player.throttle, this.player.airspeedNorm, {
             gLoad: this.player.telemetry?.gApprox ?? 1,
             turnRate: Math.abs(this.player.rollRate) + Math.abs(this.player.yawRate) * 1.4,
             boosting: this.player.boosting,
+            windBoost: stunt.windBoost ?? 0,
         });
         this.player.updateExhaust(this.sceneBuilder.exhaustLight, time);
         this.contrails.update(dt, this.player, this.camera.position);
@@ -1211,6 +1257,7 @@ export class GameCore {
             this.audio.hit();
             this.cameraRig.addShake(0.32);
             this.postFx.pulseChromatic(0.75);
+            this.radio?.trigger('damage');
         }
         this.lastHp = this.player.hp;
 

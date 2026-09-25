@@ -79,12 +79,19 @@ export class Hud {
             leaderboard: q('leaderboard-rows'),
             worldHud: q('world-hud'),
             radarCanvas: q('radar-canvas'),
+            radioBox: q('radio-box'),
+            radioCall: q('radio-call'),
+            radioText: q('radio-text'),
+            stuntBanner: q('stunt-banner'),
+            rainOverlay: q('rain-overlay'),
+            radarGlitch: q('radar-glitch'),
         };
 
         this._waveToastTimer = 0;
         this._scorePopTimer = 0;
         this._damageTimer = 0;
         this._achToastTimer = 0;
+        this._radioTimer = 0;
         this._bindControls();
         this.renderRoute(0, config.mission.waypoint_count, true);
     }
@@ -347,6 +354,45 @@ export class Hud {
             this.el.radAlt.parentElement?.classList.toggle('danger', radarAlt < 50);
         }
         this.el.spdChip?.classList.toggle('hot', hot);
+    }
+
+
+    showRadio(callsign, line) {
+        const box = this.el.radioBox;
+        if (!box) return;
+        if (this.el.radioCall) this.el.radioCall.textContent = callsign || 'COM';
+        if (this.el.radioText) this.el.radioText.textContent = line || '';
+        box.classList.add('show');
+        clearTimeout(this._radioTimer);
+        const secs = (this.config.radio?.display_seconds ?? 4.2) * 1000;
+        this._radioTimer = setTimeout(() => box.classList.remove('show'), secs);
+    }
+
+    hideRadio() {
+        this.el.radioBox?.classList.remove('show');
+        clearTimeout(this._radioTimer);
+    }
+
+    setStuntBanner(active, mul = 2) {
+        const el = this.el.stuntBanner;
+        if (!el) return;
+        el.textContent = `[LOW ALTITUDE MULTIPLIER x${mul}]`;
+        el.classList.toggle('show', !!active);
+    }
+
+    setRainOverlay(intensity = 0) {
+        const el = this.el.rainOverlay;
+        if (!el) return;
+        const on = intensity > 0.08;
+        el.classList.toggle('show', on);
+        el.style.opacity = String(Math.min(0.85, intensity * 0.9));
+    }
+
+    setRadarGlitch(active) {
+        const on = !!active;
+        this.el.radarGlitch?.classList.toggle('show', on);
+        const radar = this.el.radarCanvas?.parentElement;
+        radar?.classList.toggle('glitch', on);
     }
 
     /** @param {boolean} active GPWS Pull Up 警示 */

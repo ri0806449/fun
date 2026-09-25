@@ -315,6 +315,46 @@ return [
         'radio_volume' => 0.72,
     ],
 
+    'radio' => [
+        'enabled' => true,
+        'cooldown' => 6.5,
+        'time_low_seconds' => 60,
+        'callsign' => 'COM',
+        'display_seconds' => 4.2,
+    ],
+
+    'weather' => [
+        'enabled' => true,
+        'dusk_at' => 0.35,
+        'rain_at' => 0.62,
+        'elevation_clear' => 8.0,
+        'elevation_dusk' => 1.5,
+        'elevation_rain' => -2.5,
+        'turbidity_clear' => 10.0,
+        'turbidity_rain' => 18.0,
+        'fog_mul_rain' => 2.4,
+        'rain_particles' => 1400,
+        'rain_speed' => 42.0,
+        'radar_glitch_interval' => 7.5,
+        'radar_glitch_duration' => 0.55,
+    ],
+
+    'stunts' => [
+        'enabled' => true,
+        'low_alt_agl' => 20.0,
+        'low_alt_hold' => 3.0,
+        'low_alt_floor' => 4.0,
+        'low_alt_score' => 8,
+        'low_alt_score_interval' => 0.35,
+        'low_alt_multiplier_label' => 2,
+        'low_alt_wind_boost' => 0.45,
+        'low_alt_foam_mul' => 2.2,
+        'close_call_distance' => 14.0,
+        'close_call_min_distance' => 5.5,
+        'close_call_score' => 75,
+        'close_call_cooldown' => 4.5,
+    ],
+
     'visual' => [
         'tone_mapping_exposure' => 0.85,
         'env_intensity' => 0.45,

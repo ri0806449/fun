@@ -62,6 +62,16 @@
     <div id="lock-circle"></div>
     <div id="lock-status">NO LOCK</div>
     <div id="gpws-alert" aria-live="assertive">PULL UP! PULL UP!</div>
+    <div id="stunt-banner" aria-live="polite">[LOW ALTITUDE MULTIPLIER x2]</div>
+    <div id="radio-box" aria-live="polite">
+        <div class="radio-avatar" aria-hidden="true"><i></i></div>
+        <div class="radio-body">
+            <div class="radio-call" id="radio-call">COM</div>
+            <div class="radio-text" id="radio-text"></div>
+        </div>
+    </div>
+    <div id="rain-overlay" aria-hidden="true"></div>
+    <div id="radar-glitch" aria-hidden="true"></div>
     <div id="world-hud"></div>
 
     <div id="weapon-label">CANNON · SPACE / MISSILE · F</div>
