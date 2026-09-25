@@ -439,21 +439,40 @@ canvas{display:block}
 .leaderboard .lb-empty{justify-content:center;color:rgba(160,200,240,.45)}
 
 #loading{
-  position:absolute;inset:0;z-index:100;
+  position:absolute;inset:0;z-index:100;pointer-events:auto;
   background:radial-gradient(ellipse at center,rgba(10,26,53,.55),rgba(2,6,14,.78));
-  display:flex;flex-direction:column;align-items:center;justify-content:center;transition:opacity .6s;cursor:pointer;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;transition:opacity .6s;cursor:default;
 }
+#loading .end-btn:disabled{
+  opacity:.45;cursor:wait;filter:grayscale(.25);transform:none;box-shadow:none;
+}
+.menu-boot-status{
+  margin-top:12px;font-family:'Orbitron',sans-serif;font-size:11px;letter-spacing:2px;
+  color:rgba(150,200,255,.55);text-align:center;
+}
+.menu-boot-error{
+  margin-top:10px;max-width:min(420px,92vw);padding:10px 12px;border-radius:8px;
+  background:rgba(80,16,24,.75);border:1px solid rgba(255,100,120,.45);
+  color:#ffb0b8;font-size:12px;line-height:1.45;text-align:center;letter-spacing:.3px;
+}
+.menu-boot-reload{margin-top:12px;width:100%}
+.menu-boot-external{margin-top:8px;width:100%;font-size:12px;letter-spacing:.5px}
 #loading h1{font-family:'Orbitron',sans-serif;font-size:28px;letter-spacing:8px;color:#8cf;margin-bottom:16px;text-shadow:0 0 30px rgba(60,160,255,.6)}
 #loading p{color:rgba(160,200,255,.7);font-size:15px;letter-spacing:3px;margin-top:20px;animation:pulse 1.4s ease-in-out infinite}
+#loading p.menu-help,
+#loading p.menu-boot-status,
+#loading p.menu-boot-error{
+  animation:none;
+}
 #loading p.menu-help{
-  animation:none;opacity:.55;font-size:12px;letter-spacing:.8px;margin-top:10px;max-width:420px;text-align:center;line-height:1.5;
+  opacity:.55;font-size:12px;letter-spacing:.8px;margin-top:10px;max-width:420px;text-align:center;line-height:1.5;
   color:rgba(150,190,230,.55);
 }
 @keyframes pulse{0%,100%{opacity:.45}50%{opacity:1}}
 #loading .bar{width:200px;height:3px;background:rgba(80,140,200,.2);border-radius:2px;overflow:hidden}
 #loading .bar i{display:block;height:100%;width:0%;background:linear-gradient(90deg,#2af,#8ef);box-shadow:0 0 12px #4af;animation:load 1s ease-out forwards}
 @keyframes load{to{width:100%}}
-#loading .menu-panel{width:min(360px,92vw);margin-top:24px}
+#loading .menu-panel{width:min(360px,92vw);margin-top:24px;position:relative;z-index:2;pointer-events:auto}
 #loading .pilot-field{display:flex;flex-direction:column;gap:6px;margin-bottom:14px}
 #loading .pilot-field label{
   font-family:'Orbitron',sans-serif;font-size:10px;letter-spacing:3px;color:rgba(150,205,255,.6);
@@ -481,6 +500,12 @@ canvas{display:block}
   width:min(520px,94vw);max-height:88vh;overflow:auto;padding:28px 24px 22px;border-radius:14px;
   background:linear-gradient(165deg,rgba(10,28,56,.97),rgba(6,14,32,.98));
   border:1px solid rgba(120,200,255,.4);box-shadow:0 20px 60px rgba(0,0,0,.55);
+  display:flex;flex-direction:column;
+}
+#hangar-card .end-actions{
+  position:sticky;bottom:0;margin-top:12px;padding-top:12px;
+  background:linear-gradient(180deg,transparent,rgba(6,14,32,.98) 35%);
+  z-index:2;
 }
 #hangar-card h2{
   font-family:'Orbitron',sans-serif;font-size:20px;letter-spacing:4px;color:#9cf;text-align:center;margin-bottom:8px;

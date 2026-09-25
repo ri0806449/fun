@@ -11,9 +11,14 @@
         </div>
         <div class="menu-scrap" id="menu-scrap">SCRAP <b>0</b></div>
         <div class="end-actions">
-            <button type="button" class="end-btn primary" id="btn-start">START MISSION</button>
-            <button type="button" class="end-btn secondary" id="btn-hangar">HANGAR</button>
+            {{-- disabled 至 GameCore boot 完成；避免 JS 未就緒時點擊無反應被誤認壞掉 --}}
+            <button type="button" class="end-btn primary" id="btn-start" disabled aria-busy="true">START MISSION</button>
+            <button type="button" class="end-btn secondary" id="btn-hangar" disabled aria-busy="true">HANGAR</button>
         </div>
+        <p id="menu-boot-status" class="menu-boot-status" role="status">引擎載入中…</p>
+        <p id="menu-boot-error" class="menu-boot-error" hidden></p>
+        <button type="button" class="end-btn secondary menu-boot-reload" id="btn-boot-reload" hidden>重新整理</button>
+        <button type="button" class="end-btn primary menu-boot-external" id="btn-boot-external" hidden>用系統瀏覽器開啟</button>
         @include('game.partials.leaderboard', ['leaderboard' => $leaderboard])
     </div>
 

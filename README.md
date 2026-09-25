@@ -16,14 +16,16 @@ cp .env.example .env
 php artisan key:generate
 php artisan migrate
 
-# 後端
-php artisan serve
+# 後端（預設 8088；本機 8000 常被其他專案佔用）
+php artisan serve --host=127.0.0.1 --port=8088
 
-# 前端（另開終端）
+# 前端（另開終端；開發時熱更新）
 npm run dev
 ```
 
-瀏覽器開 `http://127.0.0.1:8000`。
+瀏覽器開 `http://127.0.0.1:8088`。
+
+若 `8088` 也被佔用，可改埠，例如 `--port=8765`。
 
 正式環境請先 `npm run build` 再 `php artisan serve`（或用 Nginx／Herd）。
 

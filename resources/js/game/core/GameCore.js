@@ -37,6 +37,7 @@ import { RadioChatter } from '../hud/RadioChatter.js';
 import { WeatherSystem } from '../world/WeatherSystem.js';
 import { StuntScoring } from '../scoring/StuntScoring.js';
 import { clampToneMappingExposure } from '../world/atmosphereLimits.js';
+import { createWebGLRenderer, disposeContainerCanvases } from '../utils/createWebGLRenderer.js';
 
 /**
  * GameCore — 組裝場景、實體、HUD 與主迴圈，並持有遊戲狀態。
@@ -218,6 +219,7 @@ export class GameCore {
         this.hud.renderRoute(0, this.route.total, true);
         this.loop = new Loop((dt, time) => this.update(dt, time));
         this._bindInput();
+        this.hud.markReady();
     }
 
     _initRenderer() {
@@ -232,9 +234,8 @@ export class GameCore {
             5500
         );
 
-        this.renderer = new THREE.WebGLRenderer({
+        this.renderer = createWebGLRenderer(this.container, {
             antialias: this.config.performance?.antialias !== false,
-            powerPreference: 'high-performance',
         });
         this.renderer.setSize(innerWidth, innerHeight);
         const maxPr = this.config.performance?.max_pixel_ratio ?? 1.5;
@@ -245,6 +246,15 @@ export class GameCore {
         );
         this.renderer.outputColorSpace = THREE.SRGBColorSpace;
         this.container.appendChild(this.renderer.domElement);
+
+        // context 被系統回收時提示重新整理，避免默默黑屏
+        this.renderer.domElement.addEventListener('webglcontextlost', (e) => {
+            e.preventDefault();
+            console.warn('[Sky Fighter] WebGL context lost');
+            this.hud?.markBootError?.(
+                '繪圖環境已中斷（可能開啟過多分頁）。請重新整理頁面。'
+            );
+        }, false);
 
         // 非關鍵系統降頻累積器
         this._perfAcc = {
@@ -1590,5 +1600,42 @@ export class GameCore {
     run() {
         this.hud.applyState(this.state);
         this.loop.start();
+    }
+
+    /**
+     * 釋放 WebGL／迴圈（HMR 或重新 boot 前呼叫），避免 context 累積。
+     */
+    dispose() {
+        try {
+            this.loop?.stop?.();
+        } catch {
+            // ignore
+        }
+        try {
+            this.water?.dispose?.();
+        } catch {
+            // ignore
+        }
+        try {
+            this.postFx?.composer?.dispose?.();
+            if (this.postFx) this.postFx.composer = null;
+        } catch {
+            // ignore
+        }
+        try {
+            const canvas = this.renderer?.domElement;
+            this.renderer?.dispose?.();
+            const gl = this.renderer?.getContext?.();
+            gl?.getExtension?.('WEBGL_lose_context')?.loseContext?.();
+            canvas?.remove?.();
+        } catch {
+            // ignore
+        }
+        this.renderer = null;
+        try {
+            disposeContainerCanvases(this.container);
+        } catch {
+            // ignore
+        }
     }
 }

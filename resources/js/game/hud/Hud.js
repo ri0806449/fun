@@ -102,43 +102,86 @@ export class Hud {
             onOpenHangar, onCloseHangar, onEndHangar,
         } = this.handlers;
 
-        // 僅按鈕開始，避免點機庫誤觸發
-        this.el.startBtn?.addEventListener('click', (e) => {
-            e.stopPropagation();
-            onStart?.();
-        });
-        this.el.hangarBtn?.addEventListener('click', (e) => {
-            e.stopPropagation();
-            onOpenHangar?.();
-        });
-        this.el.hangarBack?.addEventListener('click', (e) => {
-            e.stopPropagation();
-            onCloseHangar?.();
-        });
-        q('btn-end-hangar')?.addEventListener('click', (e) => {
-            e.stopPropagation();
-            onEndHangar?.();
-        });
+        // 委派＋直接綁定雙保險，避免單一 listener 漏綁或被覆蓋
+        const bindClick = (el, fn) => {
+            if (!el || typeof fn !== 'function') return;
+            el.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                if (el.disabled) return;
+                fn();
+            });
+        };
+
+        bindClick(this.el.startBtn, onStart);
+        bindClick(this.el.hangarBtn, onOpenHangar);
+        bindClick(this.el.hangarBack, onCloseHangar);
+        bindClick(q('btn-end-hangar'), onEndHangar);
 
         this.el.pilotName?.addEventListener('click', (e) => e.stopPropagation());
         this.el.pilotName?.addEventListener('keydown', (e) => {
             e.stopPropagation();
-            if (e.key === 'Enter') onStart?.();
+            if (e.key === 'Enter' && !this.el.startBtn?.disabled) onStart?.();
         });
 
         this.el.muteBtn?.addEventListener('click', () => onToggleMute?.());
-        q('btn-restart')?.addEventListener('click', (e) => {
-            e.stopPropagation();
-            onRestart?.();
-        });
-        q('btn-pause-restart')?.addEventListener('click', (e) => {
-            e.stopPropagation();
-            onRestart?.();
-        });
-        q('btn-resume')?.addEventListener('click', (e) => {
-            e.stopPropagation();
-            onResume?.();
-        });
+        bindClick(q('btn-restart'), onRestart);
+        bindClick(q('btn-pause-restart'), onRestart);
+        bindClick(q('btn-resume'), onResume);
+    }
+
+    /** GameCore 完成初始化後呼叫：解鎖選單按鈕。 */
+    markReady() {
+        for (const btn of [this.el.startBtn, this.el.hangarBtn]) {
+            if (!btn) continue;
+            btn.disabled = false;
+            btn.removeAttribute('aria-busy');
+        }
+        const status = q('menu-boot-status');
+        if (status) status.hidden = true;
+        const err = q('menu-boot-error');
+        if (err) err.hidden = true;
+        const reload = q('btn-boot-reload');
+        if (reload) reload.hidden = true;
+        const external = q('btn-boot-external');
+        if (external) external.hidden = true;
+    }
+
+    /** boot 失敗時顯示錯誤，按鈕維持 disabled。 */
+    markBootError(message) {
+        const status = q('menu-boot-status');
+        if (status) status.hidden = true;
+        const err = q('menu-boot-error');
+        if (err) {
+            err.hidden = false;
+            err.textContent = message || '遊戲引擎啟動失敗，請重新整理。';
+        }
+        const reload = q('btn-boot-reload');
+        if (reload) {
+            reload.hidden = false;
+            reload.onclick = () => location.reload();
+        }
+        const external = q('btn-boot-external');
+        if (external) {
+            const playUrl = `${location.protocol}//127.0.0.1:8088/`;
+            external.hidden = false;
+            external.dataset.url = playUrl;
+            external.textContent = `用系統瀏覽器開啟 ${playUrl}`;
+            external.onclick = async (e) => {
+                e.preventDefault();
+                try {
+                    await navigator.clipboard?.writeText?.(playUrl);
+                } catch {
+                    // ignore
+                }
+                window.open(playUrl, '_blank', 'noopener,noreferrer');
+            };
+        }
+        for (const btn of [this.el.startBtn, this.el.hangarBtn]) {
+            if (!btn) continue;
+            btn.disabled = true;
+            btn.setAttribute('aria-busy', 'true');
+        }
     }
 
     get pilotName() {
