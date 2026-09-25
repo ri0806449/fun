@@ -36,6 +36,7 @@ import { AchievementTracker } from '../meta/AchievementTracker.js';
 import { RadioChatter } from '../hud/RadioChatter.js';
 import { WeatherSystem } from '../world/WeatherSystem.js';
 import { StuntScoring } from '../scoring/StuntScoring.js';
+import { clampToneMappingExposure } from '../world/atmosphereLimits.js';
 
 /**
  * GameCore — 組裝場景、實體、HUD 與主迴圈，並持有遊戲狀態。
@@ -239,7 +240,9 @@ export class GameCore {
         const maxPr = this.config.performance?.max_pixel_ratio ?? 1.5;
         this.renderer.setPixelRatio(Math.min(devicePixelRatio, maxPr));
         this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-        this.renderer.toneMappingExposure = this.config.visual?.tone_mapping_exposure ?? 0.5;
+        this.renderer.toneMappingExposure = clampToneMappingExposure(
+            this.config.visual?.tone_mapping_exposure ?? 0.5
+        );
         this.renderer.outputColorSpace = THREE.SRGBColorSpace;
         this.container.appendChild(this.renderer.domElement);
 

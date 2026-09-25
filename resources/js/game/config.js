@@ -401,7 +401,7 @@ export const DEFAULTS = Object.freeze({
         elevation_dusk: 1.5,
         elevation_rain: -2.5,
         turbidity_clear: 10,
-        turbidity_rain: 18,
+        turbidity_rain: 14,
         fog_mul_rain: 2.4,
         rain_particles: 480,
         rain_speed: 42,

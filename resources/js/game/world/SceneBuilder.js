@@ -5,6 +5,14 @@ import {
     createProceduralLensflare,
     loadTextureWithFallback,
 } from './textureFallbacks.js';
+import {
+    clampAmbientIntensity,
+    clampFogDensity,
+    clampRayleigh,
+    clampSunIntensity,
+    clampTurbidity,
+    fogLightnessForAltitude,
+} from './atmosphereLimits.js';
 
 /** 可變陽光方向（各系統共享；SceneBuilder 依 elevation／azimuth 更新）。 */
 export const SUN_DIR = new THREE.Vector3(-0.55, 0.32, 0.45).normalize();
@@ -113,14 +121,15 @@ export class SceneBuilder {
         this.decor = new THREE.Group();
         this.cloudGroups = [];
         this.distantCraft = [];
-        this._fogBase = environment.fog_density ?? 0.00048;
+        this._fogBase = clampFogDensity(environment.fog_density ?? 0.00048);
         this._fogHeight = environment.fog_height ?? 180;
         this.sunDirection = SUN_DIR.clone();
         this._flareAnchor = null;
         this._lensflare = null;
         this._cloudPlaneGeo = null;
         this._tmp = new THREE.Vector3();
-        this._fogColor = new THREE.Color();
+        // 獨立 Color 實例（勿與 fog.color／燈光共用參考）；預設深藍而非白
+        this._fogColor = new THREE.Color(0x1c456e);
         this._lastFogAlt = Number.NaN;
         this._lastFogDens = Number.NaN;
         /** 雲 billboard／uniforms 更新步幅（1=每幀）；飛行中可提高 */
@@ -147,7 +156,24 @@ export class SceneBuilder {
         this.rebuildDecor();
     }
 
-    /** 高度霧：低空較濃、高空較稀。複用 Color，避免每幀 new 觸發 GC。 */
+    /**
+     * 天氣系統變更霧基準密度時呼叫：夾制後強制重算高度霧，
+     * 避免 flight_fog_hz／altitude epsilon 讓 sky 已變、fog 仍停在晴天值而洗白。
+     * @param {number} density
+     * @param {number} [altitude]
+     */
+    setFogBase(density, altitude) {
+        const next = clampFogDensity(density);
+        const changed = !Number.isFinite(this._fogBase) || Math.abs(next - this._fogBase) > 1e-10;
+        this._fogBase = next;
+        if (!changed && altitude === undefined) return;
+        const alt = altitude !== undefined
+            ? altitude
+            : (Number.isFinite(this._lastFogAlt) ? this._lastFogAlt : 120);
+        this._applyHeightFog(alt, true);
+    }
+
+    /** 高度霧：低空較濃、高空較稀。複用獨立 Color，以 hex／copy 寫入 fog（永不共用參考）。 */
     _applyHeightFog(altitude, force = false) {
         const eps = this.fogAltitudeEpsilon;
         if (!force && Number.isFinite(this._lastFogAlt) && Math.abs(altitude - this._lastFogAlt) < eps) {
@@ -157,9 +183,11 @@ export class SceneBuilder {
 
         const h = this._fogHeight;
         const t = Math.max(0, Math.min(0.85, altitude / (h * 2.2)));
-        const dens = this._fogBase * (1.35 - t);
-        this._fogColor.setHSL(0.58, 0.42, 0.16 + Math.min(0.14, altitude / 900));
+        const dens = clampFogDensity(this._fogBase * (1.35 - t));
+        // 每次以絕對 HSL 寫入，避免 mutate 漂移；L 夾在深藍區間
+        this._fogColor.setHSL(0.58, 0.42, fogLightnessForAltitude(altitude));
         if (!this.scene.fog || !(this.scene.fog instanceof THREE.FogExp2)) {
+            // 傳 hex 而非 Color 實例，確保 FogExp2 內建獨立 color
             this.scene.fog = new THREE.FogExp2(this._fogColor.getHex(), dens);
             this._lastFogDens = dens;
             return;
@@ -214,8 +242,11 @@ export class SceneBuilder {
     _applySkyUniforms() {
         if (!this.sky?.material?.uniforms) return;
         const u = this.sky.material.uniforms;
-        u.turbidity.value = this.env.sky_turbidity ?? 14.0;
-        u.rayleigh.value = this.env.sky_rayleigh ?? 0.72;
+        // 夾制：高 turbidity 會長時間把天穹洗成乳白
+        this.env.sky_turbidity = clampTurbidity(this.env.sky_turbidity ?? 14.0);
+        this.env.sky_rayleigh = clampRayleigh(this.env.sky_rayleigh ?? 0.72);
+        u.turbidity.value = this.env.sky_turbidity;
+        u.rayleigh.value = this.env.sky_rayleigh;
         u.mieCoefficient.value = this.env.sky_mie_coefficient ?? 0.0032;
         u.mieDirectionalG.value = this.env.sky_mie_directional_g ?? 0.48;
         // Sky.js 太陽盤預設極亮（~760×）；shader 已壓基數，再以倍率微調
@@ -241,15 +272,19 @@ export class SceneBuilder {
             this.sunLight.position.copy(this.sunDirection).multiplyScalar(220);
             // 低仰角時再降強度、偏暖（基準來自 config）
             const elev01 = Math.max(0, Math.min(1, elev / 45));
-            const base = this.env.sun_intensity ?? 0.38;
-            this.sunLight.intensity = base * (0.65 + elev01 * 0.4);
+            const base = clampSunIntensity(this.env.sun_intensity ?? 0.38);
+            this.env.sun_intensity = base;
+            this.sunLight.intensity = Math.min(1.05, base * (0.65 + elev01 * 0.4));
             this.sunLight.color.setHSL(0.07 + elev01 * 0.04, 0.48, 0.82);
+        }
+        if (this.ambientLight) {
+            this.ambientLight.intensity = clampAmbientIntensity(this.env.ambient_intensity ?? 0.28);
         }
     }
 
     _buildLights() {
-        const sunI = this.env.sun_intensity ?? 0.38;
-        const ambI = this.env.ambient_intensity ?? 0.28;
+        const sunI = clampSunIntensity(this.env.sun_intensity ?? 0.38);
+        const ambI = clampAmbientIntensity(this.env.ambient_intensity ?? 0.28);
         const hemiI = this.env.hemisphere_intensity ?? 0.42;
         const fillI = this.env.fill_intensity ?? 0.26;
         const rimI = this.env.rim_intensity ?? 0.18;
@@ -257,7 +292,8 @@ export class SceneBuilder {
         this.sunLight = new THREE.DirectionalLight(0xffd4a8, sunI);
         this.sunLight.position.copy(this.sunDirection).multiplyScalar(220);
         this.scene.add(this.sunLight);
-        this.scene.add(new THREE.AmbientLight(0x2a4060, ambI));
+        this.ambientLight = new THREE.AmbientLight(0x2a4060, ambI);
+        this.scene.add(this.ambientLight);
         this.scene.add(new THREE.HemisphereLight(0x5a7aa0, 0x081828, hemiI));
 
         const fill = new THREE.DirectionalLight(0x5a78a8, fillI);

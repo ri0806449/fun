@@ -5,6 +5,7 @@ import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js'
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { FilmPass } from 'three/addons/postprocessing/FilmPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+import { clampGradeExposure } from './atmosphereLimits.js';
 
 const GRADE_SHADER = {
     uniforms: {
@@ -177,7 +178,7 @@ export class PostFx {
         const gradeEnabled = visual.grade_enabled === true;
         if (gradeEnabled) {
             this.gradePass = new ShaderPass(GRADE_SHADER);
-            this.gradePass.uniforms.gradeExposure.value = visual.grade_exposure ?? 0.95;
+            this.gradePass.uniforms.gradeExposure.value = clampGradeExposure(visual.grade_exposure ?? 0.95);
             this.composer.addPass(this.gradePass);
         }
 

@@ -1,7 +1,19 @@
 import * as THREE from 'three';
+import {
+    clampAmbientIntensity,
+    clampFogDensity,
+    clampRayleigh,
+    clampSunIntensity,
+    clampTurbidity,
+    TURBIDITY_MAX,
+} from './atmosphereLimits.js';
+
+/** 雨天 turbidity 上限（Preetham 過高易乳白白） */
+const TURBIDITY_RAIN_CAP = TURBIDITY_MAX;
 
 /**
  * WeatherSystem — 任務時間推進：晴 → 黃昏 → 雨。
+ * 所有天空／霧／光強度以基準值絕對插值並夾制，避免長時間累積洗白。
  */
 export class WeatherSystem {
     /**
@@ -27,9 +39,9 @@ export class WeatherSystem {
         this._lastDusk = -1;
         this._lastRain = -1;
         this._baseElev = sceneBuilder?.env?.sky_elevation ?? 3.2;
-        this._baseFog = sceneBuilder?._fogBase ?? 0.00068;
-        this._baseSun = sceneBuilder?.env?.sun_intensity ?? 0.38;
-        this._baseAmb = sceneBuilder?.env?.ambient_intensity ?? 0.28;
+        this._baseFog = clampFogDensity(sceneBuilder?._fogBase ?? 0.00068);
+        this._baseSun = clampSunIntensity(sceneBuilder?.env?.sun_intensity ?? 0.38);
+        this._baseAmb = clampAmbientIntensity(sceneBuilder?.env?.ambient_intensity ?? 0.28);
         if (this.enabled) this._buildRain();
     }
 
@@ -43,13 +55,14 @@ export class WeatherSystem {
         }
         this._rainGeo = new THREE.BufferGeometry();
         this._rainGeo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+        // NormalBlending：Additive 在雨相後期會把整屏洗白
         this._rainMat = new THREE.PointsMaterial({
             color: 0xa8c8e8,
             size: 0.35,
             transparent: true,
             opacity: 0,
             depthWrite: false,
-            blending: THREE.AdditiveBlending,
+            blending: THREE.NormalBlending,
         });
         this._rain = new THREE.Points(this._rainGeo, this._rainMat);
         this._rain.frustumCulled = false;
@@ -63,6 +76,9 @@ export class WeatherSystem {
         this.rainIntensity = 0;
         this.glitchT = 0;
         this._glitchAcc = 0;
+        this._lastDusk = -1;
+        this._lastRain = -1;
+        this._skyDirty = true;
         this._applySky(0, 0);
         if (this._rainMat) this._rainMat.opacity = 0;
         if (this._rain) this._rain.visible = false;
@@ -138,41 +154,56 @@ export class WeatherSystem {
         const sb = this.sceneBuilder;
         if (!sb?.env) return;
 
+        const d = THREE.MathUtils.clamp(duskBlend, 0, 1);
+        const r = THREE.MathUtils.clamp(rainBlend, 0, 1);
+
         const elevClear = this.cfg.elevation_clear ?? this._baseElev;
         const elevDusk = this.cfg.elevation_dusk ?? -2.5;
         const elevRain = this.cfg.elevation_rain ?? -6;
-        const elev = duskBlend < 1
-            ? THREE.MathUtils.lerp(elevClear, elevDusk, duskBlend)
-            : THREE.MathUtils.lerp(elevDusk, elevRain, rainBlend);
+        const elev = d < 1
+            ? THREE.MathUtils.lerp(elevClear, elevDusk, d)
+            : THREE.MathUtils.lerp(elevDusk, elevRain, r);
 
         sb.env.sky_elevation = elev;
-        sb.env.sky_turbidity = THREE.MathUtils.lerp(
+        sb.env.sky_turbidity = clampTurbidity(THREE.MathUtils.lerp(
             this.cfg.turbidity_clear ?? 10,
-            this.cfg.turbidity_rain ?? 18,
-            Math.max(duskBlend * 0.5, rainBlend)
-        );
-        sb.env.sky_rayleigh = THREE.MathUtils.lerp(0.72, 0.95, duskBlend);
-        sb.env.sun_intensity = this._baseSun * THREE.MathUtils.lerp(
+            Math.min(TURBIDITY_RAIN_CAP, this.cfg.turbidity_rain ?? 14),
+            Math.max(d * 0.5, r)
+        ));
+        sb.env.sky_rayleigh = clampRayleigh(THREE.MathUtils.lerp(0.72, 0.95, d));
+        sb.env.sun_intensity = clampSunIntensity(this._baseSun * THREE.MathUtils.lerp(
             1,
             0.45,
-            Math.max(duskBlend, rainBlend * 0.8)
+            Math.max(d, r * 0.8)
+        ));
+        sb.env.ambient_intensity = clampAmbientIntensity(
+            this._baseAmb * THREE.MathUtils.lerp(1, 0.7, d)
         );
-        sb.env.ambient_intensity = this._baseAmb * THREE.MathUtils.lerp(1, 0.7, duskBlend);
-        sb._fogBase = this._baseFog * THREE.MathUtils.lerp(1, this.cfg.fog_mul_rain ?? 2.4, rainBlend);
+
+        const fogMul = Math.min(2.6, Math.max(1, this.cfg.fog_mul_rain ?? 2.4));
+        const fogTarget = clampFogDensity(this._baseFog * THREE.MathUtils.lerp(1, fogMul, r));
+        // 強制同步高度霧：降頻路徑不會因高度沒變而漏掉雨霧加濃
+        if (typeof sb.setFogBase === 'function') {
+            sb.setFogBase(fogTarget);
+        } else {
+            sb._fogBase = fogTarget;
+            sb._applyHeightFog?.(sb._lastFogAlt || 120, true);
+        }
 
         sb._applySkyUniforms?.();
         sb._updateSunPosition?.();
 
         if (sb.sunLight) {
-            const warm = duskBlend * (1 - rainBlend * 0.5);
-            sb.sunLight.color.setHSL(0.07 + warm * 0.02, 0.45 + warm * 0.25, 0.78 - rainBlend * 0.15);
+            const warm = d * (1 - r * 0.5);
+            // 絕對 setHSL（非 offset），避免色溫累積變白
+            sb.sunLight.color.setHSL(0.07 + warm * 0.02, 0.45 + warm * 0.25, 0.78 - r * 0.15);
         }
     }
 
     _updateRain(dt, camera, intensity) {
         if (!this._rain || !camera) return;
         this._rain.visible = intensity > 0.05;
-        if (this._rainMat) this._rainMat.opacity = intensity * 0.55;
+        if (this._rainMat) this._rainMat.opacity = Math.min(0.5, intensity * 0.42);
         if (intensity < 0.05) return;
 
         this._rain.position.copy(camera.position);

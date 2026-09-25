@@ -232,6 +232,10 @@ class GameConfigTest extends TestCase
             $this->assertArrayHasKey($key, $weather, "缺少 weather.{$key}");
         }
         $this->assertLessThan($weather['rain_at'], $weather['dusk_at']); // dusk_at < rain_at
+        // 防洗白：雨天 turbidity／霧倍率不可過高
+        $this->assertLessThanOrEqual(14.0, (float) $weather['turbidity_rain']);
+        $this->assertLessThanOrEqual(2.6, (float) $weather['fog_mul_rain']);
+        $this->assertGreaterThanOrEqual(1.0, (float) $weather['fog_mul_rain']);
 
         $stunts = $config['stunts'];
         foreach (['low_alt_agl', 'low_alt_hold', 'close_call_distance', 'close_call_score'] as $key) {
