@@ -388,6 +388,8 @@ export class SceneBuilder {
     }
 
     _makeCloudMat(opacity, seed) {
+        // fog 必須搭配 UniformsLib.fog；自訂 shader 未含 fog uniforms 時
+        // WebGLRenderer.refreshFogUniforms 會對 undefined.value 拋錯，整幀卡死、Start Mission 看似無效。
         return new THREE.ShaderMaterial({
             uniforms: {
                 uOpacity: { value: opacity },
@@ -402,7 +404,7 @@ export class SceneBuilder {
             depthWrite: false,
             side: THREE.DoubleSide,
             blending: THREE.NormalBlending,
-            fog: true,
+            fog: false,
         });
     }
 
