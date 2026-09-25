@@ -439,7 +439,8 @@ canvas{display:block}
 .leaderboard .lb-empty{justify-content:center;color:rgba(160,200,240,.45)}
 
 #loading{
-  position:absolute;inset:0;z-index:100;background:radial-gradient(ellipse at center,#0a1a35,#02060e);
+  position:absolute;inset:0;z-index:100;
+  background:radial-gradient(ellipse at center,rgba(10,26,53,.55),rgba(2,6,14,.78));
   display:flex;flex-direction:column;align-items:center;justify-content:center;transition:opacity .6s;cursor:pointer;
 }
 #loading h1{font-family:'Orbitron',sans-serif;font-size:28px;letter-spacing:8px;color:#8cf;margin-bottom:16px;text-shadow:0 0 30px rgba(60,160,255,.6)}

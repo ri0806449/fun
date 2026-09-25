@@ -150,7 +150,8 @@ class GameConfigTest extends TestCase
         $this->assertArrayHasKey('sky_sun_disc', $env);
         $this->assertLessThanOrEqual(0.1, $env['sky_sun_disc'], 'Sky 太陽盤倍率應大幅下修（可直視）');
         $this->assertLessThanOrEqual(0.55, $env['sky_mie_directional_g'], 'mie g 應偏低以柔化太陽暈光');
-        $this->assertLessThan(5.0, $env['sky_elevation'], '暮色仰角應偏低以降低過曝');
+        $this->assertLessThanOrEqual(12.0, $env['sky_elevation'], '仰角不宜過高以免正午過曝');
+        $this->assertGreaterThan(0.0, $env['sky_elevation'], '晴天仰角應為正值以保證天空可辨');
         $this->assertLessThanOrEqual(0.5, $env['sun_intensity'], '太陽光應下修避免過曝');
         $this->assertArrayHasKey('tone_mapping_exposure', $visual);
         $this->assertArrayHasKey('bloom_strength', $visual);
@@ -159,7 +160,8 @@ class GameConfigTest extends TestCase
         $this->assertArrayHasKey('boost_blur', $visual);
         $this->assertArrayHasKey('motion_blur', $visual);
         $this->assertArrayHasKey('radial_blur', $visual);
-        $this->assertLessThanOrEqual(0.55, $visual['tone_mapping_exposure']);
+        $this->assertGreaterThan(0.4, $visual['tone_mapping_exposure'], '曝光過低會在部分 GPU 上接近全黑');
+        $this->assertLessThanOrEqual(1.2, $visual['tone_mapping_exposure']);
         $this->assertLessThan(0.35, $visual['bloom_strength']);
         $this->assertGreaterThanOrEqual(0.9, $visual['bloom_threshold']);
     }
